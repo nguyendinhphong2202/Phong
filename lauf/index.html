@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="description" content="Laufbuch — Lauf-Screenshots und Fotos automatisch auslesen, Einheiten speichern und Fortschritte sehen." />
+  <meta name="theme-color" content="#d9480f" />
+  <title>Laufbuch</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8F%83%3C/text%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M13.5 5.5a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM9.8 8.9 7 23h2.1l1.8-8 2.1 2v6h2v-7.5l-2.1-2 .6-3A7.3 7.3 0 0 0 19 13v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5 0-.8.1L6 8.3V13h2V9.6l1.8-.7"/></svg>
+      </span>
+      <span class="brand-name">Laufbuch</span>
+    </div>
+
+    <nav class="tabs" id="tabs" aria-label="Bereiche">
+      <button class="tab-btn is-active" data-tab="overview" aria-current="page">
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M4 20h16v2H4zM5 10h3v8H5zm5.5-6h3v14h-3zM16 13h3v5h-3z"/></svg>
+        <span>Übersicht</span>
+      </button>
+      <button class="tab-btn tab-btn--add" data-tab="add">
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M9 3 7.2 5H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3.2L15 3H9Zm3 15a5 5 0 1 1 0-10 5 5 0 0 1 0 10Zm0-2a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/></svg>
+        <span>Erfassen</span>
+      </button>
+      <button class="tab-btn" data-tab="runs">
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M4 5h2v2H4zm4 0h12v2H8zm-4 6h2v2H4zm4 0h12v2H8zm-4 6h2v2H4zm4 0h12v2H8z"/></svg>
+        <span>Einheiten</span>
+      </button>
+    </nav>
+
+    <button class="icon-btn" id="themeToggle" title="Hell/Dunkel umschalten" aria-label="Hell/Dunkel umschalten">
+      <svg class="ico-moon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M12.3 22A10 10 0 0 1 9.6 2.4a1 1 0 0 1 1.2 1.3A8 8 0 0 0 20.3 13a1 1 0 0 1 1.3 1.2A10 10 0 0 1 12.3 22Z"/></svg>
+      <svg class="ico-sun" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M12 17a5 5 0 1 1 0-10 5 5 0 0 1 0 10ZM11 1h2v3h-2zm0 19h2v3h-2zM3.5 4.9l1.4-1.4L7 5.6 5.6 7zm13.4 13.5 1.4-1.4 2.1 2.1-1.4 1.4zM1 11h3v2H1zm19 0h3v2h-3zM3.5 19.1 5.6 17 7 18.4l-2.1 2.1zM16.9 5.6 19 3.5l1.4 1.4L18.4 7z"/></svg>
+    </button>
+  </header>
+
+  <main class="main">
+    <!-- ============ Übersicht ============ -->
+    <section class="view is-active" id="view-overview" aria-labelledby="h-overview">
+      <h1 class="sr-only" id="h-overview">Übersicht</h1>
+
+      <div class="empty" id="overviewEmpty" hidden>
+        <div class="empty-art" aria-hidden="true">🏃</div>
+        <h2>Noch keine Läufe</h2>
+        <p>Lade einen Screenshot aus deiner Lauf-App oder ein Foto deiner Uhr hoch – die Werte werden automatisch ausgelesen.</p>
+        <button class="btn btn-primary" data-goto="add">Ersten Lauf erfassen</button>
+        <div><button class="link-btn demo-link" id="demoBtn">Mit Beispieldaten ausprobieren</button></div>
+      </div>
+
+      <div id="overviewContent">
+        <div class="notice warn demo-bar" id="demoBar" hidden>
+          Du siehst Beispieldaten. <button class="link-btn" id="demoRemove">Beispieldaten entfernen</button>
+        </div>
+        <div class="card week-card">
+          <div class="week-head">
+            <div>
+              <div class="eyebrow">Diese Woche</div>
+              <div class="week-value"><span class="big" id="weekKm">0</span> <span class="unit">/ <button class="goal-btn" id="goalBtn" title="Wochenziel ändern"><span id="weekGoal">20</span> km</button></span></div>
+            </div>
+            <div class="week-side">
+              <div class="pill" id="streakPill"></div>
+              <div class="pill" id="monthPill"></div>
+            </div>
+          </div>
+          <div class="progress" role="progressbar" aria-label="Wochenziel" aria-valuemin="0" aria-valuemax="100" id="weekProgress"><span></span></div>
+          <div class="week-foot" id="weekFoot"></div>
+        </div>
+
+        <div class="kpis">
+          <div class="kpi"><div class="kpi-label">Gesamtstrecke</div><div class="kpi-value"><span id="kpiKm">0</span><small>km</small></div></div>
+          <div class="kpi"><div class="kpi-label">Läufe</div><div class="kpi-value"><span id="kpiRuns">0</span></div></div>
+          <div class="kpi"><div class="kpi-label">Gesamtzeit</div><div class="kpi-value"><span id="kpiTime">0</span></div></div>
+          <div class="kpi"><div class="kpi-label">Ø Pace</div><div class="kpi-value"><span id="kpiPace">–</span><small>/km</small></div></div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card chart-card">
+            <div class="card-head">
+              <h2>Wochenkilometer</h2>
+              <span class="card-sub">letzte 12 Wochen</span>
+            </div>
+            <div class="chart" id="chartWeeks"></div>
+          </div>
+          <div class="card chart-card">
+            <div class="card-head">
+              <h2>Pace-Entwicklung</h2>
+              <span class="card-sub" id="paceTrend">letzte 20 Läufe</span>
+            </div>
+            <div class="chart" id="chartPace"></div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-head"><h2>Bestleistungen</h2></div>
+            <div class="records" id="records"></div>
+          </div>
+          <div class="card">
+            <div class="card-head">
+              <h2>Letzte Einheiten</h2>
+              <button class="link-btn" data-goto="runs">Alle anzeigen</button>
+            </div>
+            <ul class="run-list compact" id="recentList"></ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ Erfassen ============ -->
+    <section class="view" id="view-add" aria-labelledby="h-add">
+      <h1 class="view-title" id="h-add">Lauf erfassen</h1>
+
+      <label class="dropzone" id="dropzone" for="fileInput">
+        <input type="file" id="fileInput" accept="image/*" multiple hidden />
+        <span class="dz-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="34" height="34"><path fill="currentColor" d="M19 13v6H5v-6H3v6a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-6h-2Zm-6-.8 2.6-2.6L17 11l-5 5-5-5 1.4-1.4 2.6 2.6V3h2v9.2Z" transform="rotate(180 12 12)"/></svg>
+        </span>
+        <span class="dz-title">Screenshot oder Foto deines Laufs</span>
+        <span class="dz-sub">Hierher ziehen, mit <kbd>Strg</kbd>+<kbd>V</kbd> einfügen oder tippen zum Auswählen</span>
+      </label>
+
+      <div class="add-actions">
+        <label class="btn btn-primary" for="cameraInput">
+          <input type="file" id="cameraInput" accept="image/*" capture="environment" hidden />
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M9 3 7.2 5H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3.2L15 3H9Zm3 15a5 5 0 1 1 0-10 5 5 0 0 1 0 10Z"/></svg>
+          Uhr fotografieren
+        </label>
+        <button class="btn" id="manualBtn">Ohne Foto eintragen</button>
+      </div>
+
+      <p class="hint">
+        Funktioniert mit Screenshots aus Strava, Garmin Connect, Apple Fitness, Nike Run Club,
+        Polar, Coros, Samsung Health u.&nbsp;a. sowie Fotos vom Uhren-Display. Die Texterkennung läuft
+        vollständig auf deinem Gerät – deine Bilder verlassen es nicht.
+      </p>
+
+      <div class="queue-head" id="queueHead" hidden>
+        <h2>Zu prüfen <span class="count" id="queueCount"></span></h2>
+        <button class="btn btn-primary btn-sm" id="saveAllBtn">Alle speichern</button>
+      </div>
+      <div class="queue" id="queue"></div>
+    </section>
+
+    <!-- ============ Einheiten ============ -->
+    <section class="view" id="view-runs" aria-labelledby="h-runs">
+      <div class="runs-head">
+        <h1 class="view-title" id="h-runs">Einheiten</h1>
+        <div class="runs-tools">
+          <button class="btn btn-sm" id="exportCsvBtn">CSV exportieren</button>
+          <button class="btn btn-sm" id="exportJsonBtn">Backup</button>
+          <label class="btn btn-sm" for="importInput">Importieren<input type="file" id="importInput" accept="application/json,.json" hidden /></label>
+        </div>
+      </div>
+      <div class="empty" id="runsEmpty" hidden>
+        <div class="empty-art" aria-hidden="true">📒</div>
+        <h2>Dein Laufbuch ist leer</h2>
+        <p>Gespeicherte Einheiten erscheinen hier, nach Monaten gruppiert.</p>
+        <button class="btn btn-primary" data-goto="add">Lauf erfassen</button>
+      </div>
+      <div id="runGroups"></div>
+    </section>
+  </main>
+
+  <!-- Bearbeiten -->
+  <dialog class="dialog" id="editDialog" aria-labelledby="editTitle">
+    <div class="dialog-head">
+      <h2 id="editTitle">Einheit bearbeiten</h2>
+      <button class="icon-btn" data-close aria-label="Schließen">
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="m12 10.6 5-5 1.4 1.4-5 5 5 5-1.4 1.4-5-5-5 5L5.6 17l5-5-5-5L7 5.6z"/></svg>
+      </button>
+    </div>
+    <div class="dialog-body" id="editBody"></div>
+  </dialog>
+
+  <div class="tooltip" id="tooltip" role="status" hidden></div>
+  <div class="toast" id="toast" role="status" aria-live="polite">
+    <span id="toastMsg"></span>
+    <button class="toast-action" id="toastAction" hidden></button>
+  </div>
+
+  <!-- Formular für eine Einheit -->
+  <template id="runFormTpl">
+    <form class="run-form" novalidate>
+      <div class="fields">
+        <label class="field"><span class="field-label">Datum <i class="src"></i></span><input name="date" type="date" required /></label>
+        <label class="field"><span class="field-label">Art</span>
+          <select name="type">
+            <option>Lauf</option><option>Intervall</option><option>Trail</option><option>Laufband</option><option>Wettkampf</option><option>Gehen</option>
+          </select>
+        </label>
+        <label class="field"><span class="field-label">Distanz (km) <i class="src"></i></span><input name="distanceKm" inputmode="decimal" placeholder="z. B. 10,02" autocomplete="off" /></label>
+        <label class="field"><span class="field-label">Dauer <i class="src"></i></span><input name="durationSec" inputmode="numeric" placeholder="h:mm:ss" autocomplete="off" /></label>
+        <div class="field field-out"><span class="field-label">Pace <i class="src"></i></span><output name="pace">–</output></div>
+        <label class="field"><span class="field-label">Ø Herzfrequenz <i class="src"></i></span><input name="avgHr" inputmode="numeric" placeholder="bpm" autocomplete="off" /></label>
+        <label class="field"><span class="field-label">Max. Herzfrequenz <i class="src"></i></span><input name="maxHr" inputmode="numeric" placeholder="bpm" autocomplete="off" /></label>
+        <label class="field"><span class="field-label">Kalorien <i class="src"></i></span><input name="calories" inputmode="numeric" placeholder="kcal" autocomplete="off" /></label>
+        <label class="field"><span class="field-label">Höhenmeter <i class="src"></i></span><input name="elevationM" inputmode="numeric" placeholder="m" autocomplete="off" /></label>
+        <label class="field"><span class="field-label">Schrittfrequenz <i class="src"></i></span><input name="cadence" inputmode="numeric" placeholder="spm" autocomplete="off" /></label>
+        <label class="field field-wide"><span class="field-label">Notiz</span><input name="note" placeholder="Wie lief's?" autocomplete="off" /></label>
+      </div>
+      <div class="form-error" hidden></div>
+      <div class="form-actions"></div>
+    </form>
+  </template>
+
+  <script src="parser.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

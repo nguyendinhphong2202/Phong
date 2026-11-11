@@ -74,4 +74,12 @@ app.js       — state, rendering, editor, tasks, search, persistence
 
 ---
 
+## 🏃 Also in this repo: Laufbuch
+
+[`lauf/`](lauf/) — a running tracker (German UI) that reads run screenshots and
+watch photos via on-device OCR, saves your sessions and charts your progress.
+See [lauf/README.md](lauf/README.md).
+
+---
+
 Made to feel like a calm, green corner of the internet. 🍵

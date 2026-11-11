@@ -17,7 +17,15 @@ ausliest**, die Einheiten speichert und deine Fortschritte anzeigt.
 - **Prüfen vor dem Speichern**: Jedes Feld zeigt, ob es *erkannt* oder
   *berechnet* wurde, und lässt sich korrigieren. Mögliche Duplikate werden
   angezeigt. Mehrere Fotos auf einmal → „Alle speichern“.
-- **Fortschritt**: Wochenziel mit Fortschrittsbalken, aktive Wochen in Folge,
+- **Ziele**: beliebig viele Ziele, einfach in eigenen Worten eingeben, z. B.
+  „60 km diese Woche“, „10 km heute“, „3 Läufe pro Woche“, „5 Stunden im
+  Monat“, „Halbmarathon bis 31.12.“ oder „8 km morgen“. Unterstützt werden
+  Kilometer, Anzahl Läufe, Laufzeit und Einzelläufe. Zeiträume: Tag, Woche,
+  Monat, Jahr oder bis zu einem Datum, einmalig oder wiederkehrend. Jede
+  Zielkarte zeigt Fortschritt, Rest, verbleibende Tage, nötige km pro Tag und
+  ob du **vor oder hinter Plan** liegst. Erreichte Ziele werden beim Speichern
+  eines Laufs gefeiert, vergangene Ziele landen im Verlauf.
+- **Fortschritt**: aktive Wochen in Folge,
   Monatsvergleich, Gesamtwerte, Wochenkilometer der letzten 12 Wochen,
   Pace-Entwicklung mit Trendlinie und Bestleistungen.
 - **Einheiten**: nach Monaten gruppiert, bearbeiten und löschen (mit
@@ -28,6 +36,8 @@ ausliest**, die Einheiten speichert und deine Fortschritte anzeigt.
 Getestet mit typischen Layouts von Strava, Garmin Connect, Apple Fitness, Nike
 Run Club u. a. (Beschriftung über oder unter dem Wert, mehrspaltig, helle und
 dunkle Screenshots).
+
+![Ziele](docs/ziele.png)
 
 ![Erfassen](docs/erfassen.png)
 
@@ -57,10 +67,11 @@ lauf/
   styles.css          Design (hell/dunkel, responsiv)
   app.js              Speicher, Fotoaufbereitung, OCR, Statistiken, Diagramme
   parser.js           OCR-Text → Laufdaten (läuft auch in Node)
+  goals.js            Ziele: Eingabe in eigenen Worten, Zeiträume, Fortschritt
   tests/              Parser-Tests
 ```
 
-Tests:
+Tests (OCR-Parser und Ziele):
 
 ```bash
 node --test lauf/tests/*.test.js

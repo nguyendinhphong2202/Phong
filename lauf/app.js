@@ -8,8 +8,10 @@
   'use strict';
 
   const P = window.RunParser;
+  const G = window.Goals;
   const TESSERACT_URL = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
   const PREF_KEY = 'laufbuch.prefs.v1';
+  const GOAL_KEY = 'laufbuch.goals.v1';
   const NS = 'http://www.w3.org/2000/svg';
 
   // ---------- Small helpers ----------
@@ -113,12 +115,23 @@
 
   // ---------- State ----------
   let runs = [];
-  let prefs = { goalKm: 20, theme: null };
+  let prefs = { theme: null };
+  let goals = [];
   const queue = []; // { id, file, el, form, status }
 
   function loadPrefs() {
     try { prefs = { ...prefs, ...(JSON.parse(localStorage.getItem(PREF_KEY)) || {}) }; } catch {}
+    let stored = null;
+    try { stored = JSON.parse(localStorage.getItem(GOAL_KEY)); } catch {}
+    if (Array.isArray(stored)) goals = stored.filter((g) => g && G.METRICS.includes(g.metric) && g.target > 0);
+    else if (prefs.goalKm) {
+      // Migration: the former single weekly goal becomes a recurring weekly goal
+      goals = [{ id: uid(), metric: 'km', target: prefs.goalKm, period: 'week', recurring: true, createdAt: Date.now() }];
+      saveGoals();
+    }
+    delete prefs.goalKm;
   }
+  function saveGoals() { try { localStorage.setItem(GOAL_KEY, JSON.stringify(goals)); } catch {} }
   function savePrefs() { try { localStorage.setItem(PREF_KEY, JSON.stringify(prefs)); } catch {} }
   const sortedRuns = () => runs.slice().sort((a, b) => b.date.localeCompare(a.date) || (b.createdAt || 0) - (a.createdAt || 0));
 
@@ -236,32 +249,10 @@
     const empty = runs.length === 0;
     $('#overviewEmpty').hidden = !empty;
     $('#overviewContent').hidden = empty;
-    if (empty) return;
-    $('#demoBar').hidden = !runs.some((r) => r.demo);
+    $('#demoBar').hidden = !runs.some((r) => r.demo) && !goals.some((g) => g.demo);
     const st = stats();
-
-    // Week card
-    const goal = prefs.goalKm || 20;
-    const pct = Math.min(100, (st.current.km / goal) * 100);
-    $('#weekKm').textContent = km1(st.current.km);
-    $('#weekGoal').textContent = nf0.format(goal);
-    const prog = $('#weekProgress');
-    prog.querySelector('span').style.width = pct + '%';
-    prog.classList.toggle('done', st.current.km >= goal);
-    prog.setAttribute('aria-valuenow', Math.round(pct));
-    const left = goal - st.current.km;
-    $('#weekFoot').textContent = `${st.current.count} ${st.current.count === 1 ? 'Lauf' : 'Läufe'} · ${
-      left > 0 ? `noch ${km1(left)} km bis zum Wochenziel` : 'Wochenziel erreicht – stark!'}`;
-    const streak = $('#streakPill');
-    streak.textContent = st.streak >= 2 ? `${st.streak} Wochen in Folge aktiv` : '';
-    streak.className = 'pill good';
-    const monthName = new Date().toLocaleDateString('de-DE', { month: 'long' });
-    let mt = `${monthName}: ${km1(st.thisMonth.km)} km`;
-    if (st.lastMonth.km > 0) {
-      const diff = Math.round(((st.thisMonth.km - st.lastMonth.km) / st.lastMonth.km) * 100);
-      mt += ` · ${diff >= 0 ? '+' : '−'}${Math.abs(diff)} % zum Vormonat`;
-    }
-    $('#monthPill').textContent = mt;
+    renderGoals(st);
+    if (empty) return;
 
     // KPIs
     $('#kpiKm').textContent = st.totalKm >= 1000 ? nf0.format(st.totalKm) : km1(st.totalKm);
@@ -296,10 +287,11 @@
     const W = box.clientWidth || 480, H = box.clientHeight || 220;
     const m = { t: 18, r: 8, b: 24, l: 34 };
     const iw = W - m.l - m.r, ih = H - m.t - m.b;
-    const goal = prefs.goalKm || 20;
+    const goal = weeklyKmGoal();
     const maxKm = Math.max(...st.weeks.map((w) => w.km));
-    const tick = niceMax(Math.max(maxKm, goal) * 1.08 / 4);
-    const ticks = Math.max(2, Math.ceil(Math.max(maxKm, goal) * 1.08 / tick));
+    const top = Math.max(maxKm, goal || 0, 5) * 1.08;
+    const tick = niceMax(top / 4);
+    const ticks = Math.max(2, Math.ceil(top / tick));
     const yMax = tick * ticks;
     const y = (v) => m.t + ih - (v / yMax) * ih;
     const band = iw / st.weeks.length;
@@ -346,10 +338,12 @@
       }
     });
 
-    svg.append(s('line', { class: 'goal-line', x1: m.l, x2: W - m.r, y1: y(goal), y2: y(goal) }));
-    const gl = s('text', { class: 'goal-label', x: m.l + 4, y: y(goal) - 5 });
-    gl.textContent = `Ziel ${nf0.format(goal)} km`;
-    svg.append(gl);
+    if (goal) {
+      svg.append(s('line', { class: 'goal-line', x1: m.l, x2: W - m.r, y1: y(goal), y2: y(goal) }));
+      const gl = s('text', { class: 'goal-label', x: m.l + 4, y: y(goal) - 5 });
+      gl.textContent = `Ziel ${G.formatAmount('km', goal)}`;
+      svg.append(gl);
+    }
     box.replaceChildren(svg);
   }
 
@@ -535,11 +529,19 @@
   $('#demoBtn').addEventListener('click', async () => {
     for (const r of demoRuns()) await DB.put(r);
     runs = await DB.all();
+    if (!goals.length) {
+      const now = new Date();
+      ['25 km pro Woche', '10 km heute', '120 km diesen Monat', 'Halbmarathon bis 31.12.'].forEach((t) =>
+        goals.push({ id: uid(), demo: true, ...G.finalize(G.parseGoalText(t, now), now), createdAt: Date.now() }));
+      saveGoals();
+    }
     renderAll();
   });
   $('#demoRemove').addEventListener('click', async () => {
     for (const r of runs.filter((x) => x.demo)) await DB.del(r.id);
     runs = await DB.all();
+    goals = goals.filter((g) => !g.demo);
+    saveGoals();
     renderAll();
     toast('Beispieldaten entfernt');
   });
@@ -633,8 +635,9 @@
         const v = read(); if (!v) return;
         const updated = { ...r, ...v, note: v.note, updatedAt: Date.now() };
         for (const k of Object.keys(INT_FIELDS)) if (v[k] == null) delete updated[k];
-        await saveRun(updated);
-        dlg.close(); toast('Änderungen gespeichert');
+        const reached = await saveRun(updated);
+        dlg.close();
+        toast(reached.length ? `Gespeichert · 🎉 Ziel erreicht: ${G.describe(reached[0])}` : 'Änderungen gespeichert');
       } }),
       h('button', { class: 'btn', type: 'button', text: 'Abbrechen', onclick: () => dlg.close() }),
       h('span', { class: 'spacer' }),
@@ -648,32 +651,276 @@
     dlg.showModal();
   }
 
-  $('#goalBtn').addEventListener('click', () => {
-    $('#editTitle').textContent = 'Wochenziel';
-    const input = h('input', { type: 'number', min: 1, max: 500, step: 1, value: prefs.goalKm, inputmode: 'numeric', id: 'goalInput' });
-    const form = h('form', { class: 'run-form' },
-      h('label', { class: 'field' }, h('span', { class: 'field-label', text: 'Kilometer pro Woche' }), input),
+  // ============================================================
+  //  Goals
+  // ============================================================
+  const PERIOD_ORDER = { day: 0, week: 1, month: 2, year: 3, custom: 4 };
+  const CHIP_GOALS = ['10 km heute', '30 km diese Woche', '3 Läufe pro Woche', '100 km diesen Monat', 'Halbmarathon bis 31.12.'];
+
+  function currentGoals() {
+    const t = todayISO();
+    return goals.filter((g) => g.recurring || !g.end || g.end >= t);
+  }
+  function pastGoals() {
+    const t = todayISO();
+    return goals.filter((g) => !g.recurring && g.end && g.end < t).sort((a, b) => b.end.localeCompare(a.end));
+  }
+  /** Weekly km goal for the chart's goal line (recurring, or one-off for this week). */
+  function weeklyKmGoal() {
+    const wk = G.periodRange('week');
+    const g = goals.find((x) => x.metric === 'km' && x.period === 'week' && (x.recurring || x.start === wk.start));
+    return g ? g.target : null;
+  }
+  function amount(metric, v, unit = true) {
+    if (metric === 'single' || metric === 'km') return G.formatAmount('km', Math.round(v * 10) / 10, { unit });
+    return G.formatAmount(metric, v, { unit });
+  }
+  function shortValue(metric, v) {
+    if (metric === 'time') { const min = Math.round(v / 60); return `${Math.floor(min / 60)}:${String(min % 60).padStart(2, '0')}`; }
+    return amount(metric, v, false);
+  }
+
+  function addGoal(draft, extra = {}) {
+    const g = { id: uid(), ...G.finalize(draft), createdAt: Date.now(), ...extra };
+    goals.push(g);
+    saveGoals();
+    renderOverview();
+    return g;
+  }
+  function removeGoal(id) {
+    goals = goals.filter((g) => g.id !== id);
+    saveGoals();
+    renderOverview();
+  }
+
+  function goalCard(g, p) {
+    const { status } = p;
+    const pct = Math.floor(p.pct * 100);
+    let meta;
+    let plan = null;
+    if (status === 'done') {
+      meta = p.isCurrent ? 'Geschafft – stark! 🎉' : `Erreicht mit ${amount(g.metric, p.value)}`;
+    } else if (status === 'upcoming') {
+      const tm = new Date(); tm.setDate(tm.getDate() + 1);
+      meta = `startet ${p.range.start === P.iso(tm) ? 'morgen' : 'am ' + fmtDate(p.range.start, { day: 'numeric', month: 'short' })}`;
+    } else if (status === 'missed') {
+      meta = `Nicht erreicht – ${amount(g.metric, p.value)} von ${amount(g.metric, g.target)}`;
+    } else {
+      const parts = [];
+      if (g.metric === 'single') parts.push(p.value ? `längster Lauf bisher ${amount('km', p.value)}` : 'noch kein passender Lauf');
+      else parts.push(`noch ${amount(g.metric, p.remaining)}`);
+      parts.push(p.daysLeft === 1 ? 'nur noch heute' : `${p.daysLeft} Tage übrig`);
+      if (p.perDay) parts.push(`≈ ${amount(g.metric, p.perDay)}/Tag`);
+      meta = parts.join(' · ');
+      if (p.totalDays > 1 && g.metric !== 'single') {
+        const diff = p.value - p.expected;
+        if (Math.abs(diff) <= g.target * 0.03) plan = ['Im Plan', ''];
+        else if (diff > 0) plan = [`${amount(g.metric, diff)} vor Plan`, 'ahead'];
+        else plan = [`${amount(g.metric, -diff)} hinter Plan`, 'behind'];
+      }
+    }
+    const showMarker = status === 'active' && p.totalDays > 1 && g.metric !== 'single';
+    return h('button', { class: `goal is-${status}`, type: 'button', onclick: () => openGoal(g.id) },
+      h('div', { class: 'goal-head' }, h('span', { class: 'goal-title', text: G.describe(g) })),
+      h('div', { class: 'goal-value' },
+        h('strong', { text: shortValue(g.metric, p.value) }),
+        h('span', { class: 'goal-of', text: `/ ${amount(g.metric, g.target)}` }),
+        h('span', { class: 'goal-pct', text: status === 'done' ? '✓' : `${pct} %` })),
+      h('div', { class: 'progress', role: 'progressbar', 'aria-label': G.describe(g), 'aria-valuemin': 0, 'aria-valuemax': 100, 'aria-valuenow': pct },
+        h('span', { style: `width:${p.pct * 100}%` }),
+        showMarker ? h('i', { class: 'expected', style: `left:${p.elapsedPct * 100}%`, title: 'Soll-Stand zu Beginn des heutigen Tages' }) : null),
+      h('div', { class: 'goal-meta', text: meta }),
+      plan ? h('div', { class: 'goal-plan ' + plan[1], text: plan[0] }) : null);
+  }
+
+  function renderGoals(st) {
+    const cur = currentGoals().map((g) => ({ g, p: G.progress(g, runs) })).sort((a, b) =>
+      (a.p.status === 'upcoming') - (b.p.status === 'upcoming') ||
+      PERIOD_ORDER[a.g.period] - PERIOD_ORDER[b.g.period] ||
+      a.p.range.end.localeCompare(b.p.range.end));
+    $('#goalList').replaceChildren(...cur.map(({ g, p }) => goalCard(g, p)));
+    $('#goalList').hidden = !cur.length;
+    $('#goalEmpty').hidden = cur.length > 0;
+    if (!cur.length) {
+      $('#goalChips').replaceChildren(...CHIP_GOALS.map((t) => h('button', { class: 'chip', type: 'button', text: '+ ' + t, onclick: () => {
+        const g = addGoal(G.parseGoalText(t, new Date()));
+        toast(`Ziel „${G.describe(g)}“ hinzugefügt`, { label: 'Rückgängig', fn: () => removeGoal(g.id) });
+      } })));
+    }
+
+    const past = pastGoals();
+    $('#pastGoals').hidden = !past.length;
+    $('#pastCount').textContent = `(${past.length})`;
+    $('#pastGoalList').replaceChildren(...past.slice(0, 20).map((g) => {
+      const p = G.progress(g, runs);
+      const ok = p.status === 'done';
+      return h('li', {}, h('button', { type: 'button', onclick: () => openGoal(g.id) },
+        h('span', { class: 'mark ' + (ok ? 'ok' : 'no'), text: ok ? '✓' : '–', title: ok ? 'erreicht' : 'nicht erreicht' }),
+        h('span', { class: 'past-title', text: G.describe(g) }),
+        h('span', { class: 'past-val', text: `${amount(g.metric, p.value)} / ${amount(g.metric, g.target)}` })));
+    }));
+
+    $('#streakPill').textContent = st.streak >= 2 ? `${st.streak} Wochen in Folge aktiv` : '';
+    let mt = '';
+    if (runs.length) {
+      mt = `${new Date().toLocaleDateString('de-DE', { month: 'long' })}: ${km1(st.thisMonth.km)} km`;
+      if (st.lastMonth.km > 0) {
+        const diff = Math.round(((st.thisMonth.km - st.lastMonth.km) / st.lastMonth.km) * 100);
+        mt += ` · ${diff >= 0 ? '+' : '−'}${Math.abs(diff)} % zum Vormonat`;
+      }
+    }
+    $('#monthPill').textContent = mt;
+  }
+
+  function openGoal(id, presetText) {
+    const existing = id ? goals.find((g) => g.id === id) : null;
+    $('#editTitle').textContent = existing ? 'Ziel bearbeiten' : 'Neues Ziel';
+    let draftStart = existing ? existing.start || null : null;
+    const HINT = 'Schreib einfach, was du vorhast – oder stell es unten ein.';
+
+    const nl = h('input', { type: 'text', placeholder: 'z. B. 60 km diese Woche', autocomplete: 'off', enterkeyhint: 'done' });
+    const preview = h('div', { class: 'nl-preview', 'aria-live': 'polite', text: HINT });
+    const metric = h('select', {}, ...[['km', 'Kilometer'], ['runs', 'Anzahl Läufe'], ['time', 'Laufzeit'], ['single', 'Einzellauf']]
+      .map(([v, t]) => h('option', { value: v, text: t })));
+    const target = h('input', { type: 'number', min: '0', step: 'any', inputmode: 'decimal', placeholder: '0' });
+    const unit = h('span', { class: 'unit-suffix' });
+    const period = h('select', {}, ...[['day', 'Tag'], ['week', 'Woche'], ['month', 'Monat'], ['year', 'Jahr'], ['custom', 'Bis zu einem Datum']]
+      .map(([v, t]) => h('option', { value: v, text: t })));
+    const endDate = h('input', { type: 'date', min: todayISO() });
+    const endField = h('label', { class: 'field' }, h('span', { class: 'field-label', text: 'Bis einschließlich' }), endDate);
+    const recurring = h('input', { type: 'checkbox' });
+    const recurringText = h('span');
+    const recurringLabel = h('label', { class: 'check' }, recurring, recurringText);
+    const err = h('div', { class: 'form-error', hidden: true });
+
+    const read = () => {
+      const t = parseFloat(String(target.value).replace(',', '.'));
+      if (!(t > 0)) return null;
+      const d = {
+        metric: metric.value,
+        target: metric.value === 'time' ? Math.round(t * 3600) : metric.value === 'runs' ? Math.max(1, Math.round(t)) : Math.round(t * 100) / 100,
+        period: period.value,
+        recurring: recurring.checked,
+      };
+      if (d.period === 'custom') {
+        if (!endDate.value) return null;
+        d.start = draftStart && draftStart <= endDate.value ? draftStart : todayISO();
+        d.end = endDate.value;
+      } else if (draftStart && !d.recurring) d.start = draftStart;
+      return d;
+    };
+    const sync = () => {
+      unit.textContent = { km: 'km', runs: 'Läufe', time: 'Std.', single: 'km' }[metric.value];
+      target.step = metric.value === 'runs' ? '1' : metric.value === 'time' ? '0.25' : 'any';
+      endField.hidden = period.value !== 'custom';
+      recurringLabel.hidden = period.value === 'custom';
+      recurringText.textContent = { day: 'Jeden Tag wiederholen', week: 'Jede Woche wiederholen', month: 'Jeden Monat wiederholen', year: 'Jedes Jahr wiederholen' }[period.value] || '';
+      if (!nl.value.trim()) {
+        const d = read();
+        preview.className = 'nl-preview' + (d ? ' ok' : '');
+        preview.textContent = d ? '→ ' + G.describe(G.finalize(d)) : HINT;
+      }
+    };
+    const fill = (d) => {
+      metric.value = d.metric;
+      target.value = d.target ? (d.metric === 'time' ? +(d.target / 3600).toFixed(2) : d.target) : '';
+      period.value = d.period;
+      recurring.checked = !!d.recurring;
+      endDate.value = d.end || '';
+      draftStart = d.start || null;
+      sync();
+    };
+
+    nl.addEventListener('input', () => {
+      err.hidden = true;
+      const d = G.parseGoalText(nl.value, new Date());
+      if (d) {
+        fill(d);
+        preview.className = 'nl-preview ok';
+        preview.textContent = '→ ' + G.describe(G.finalize(d));
+      } else {
+        preview.className = 'nl-preview';
+        preview.textContent = nl.value.trim() ? 'Noch nicht verstanden – z. B. „10 km heute“ oder „3 Läufe pro Woche“.' : HINT;
+      }
+    });
+    [metric, target, period, recurring, endDate].forEach((el) => el.addEventListener(el === target ? 'input' : 'change', () => {
+      err.hidden = true;
+      if (el === period) draftStart = null;
+      nl.value = '';
+      sync();
+    }));
+
+    const form = h('form', { class: 'run-form goal-form', novalidate: true },
+      h('label', { class: 'field nl' }, h('span', { class: 'field-label', text: 'Dein Ziel in eigenen Worten' }), nl, preview),
+      h('div', { class: 'divider', text: 'oder genau einstellen' }),
+      h('div', { class: 'fields' },
+        h('label', { class: 'field' }, h('span', { class: 'field-label', text: 'Was' }), metric),
+        h('label', { class: 'field' }, h('span', { class: 'field-label', text: 'Ziel' }), h('div', { class: 'unit-wrap' }, target, unit)),
+        h('label', { class: 'field' }, h('span', { class: 'field-label', text: 'Zeitraum' }), period),
+        endField),
+      recurringLabel,
+      err,
       h('div', { class: 'form-actions' },
-        h('button', { class: 'btn btn-primary', type: 'submit', text: 'Übernehmen' }),
-        h('button', { class: 'btn', type: 'button', text: 'Abbrechen', onclick: () => dlg.close() })));
+        h('button', { class: 'btn btn-primary', type: 'submit', text: existing ? 'Speichern' : 'Ziel setzen' }),
+        h('button', { class: 'btn', type: 'button', text: 'Abbrechen', onclick: () => dlg.close() }),
+        existing ? h('span', { class: 'spacer' }) : null,
+        existing ? h('button', { class: 'btn btn-danger', type: 'button', text: 'Löschen', onclick: () => {
+          dlg.close();
+          const backup = existing;
+          removeGoal(existing.id);
+          toast('Ziel gelöscht', { label: 'Rückgängig', fn: () => { goals.push(backup); saveGoals(); renderOverview(); } });
+        } }) : null));
+
     form.addEventListener('submit', (e) => {
       e.preventDefault();
-      const v = parseInt(input.value, 10);
-      if (v > 0 && v <= 500) { prefs.goalKm = v; savePrefs(); renderOverview(); }
+      const d = read();
+      if (!d) {
+        err.hidden = false;
+        err.textContent = period.value === 'custom' && !endDate.value ? 'Bitte ein Enddatum wählen.' : 'Bitte einen Zielwert eingeben.';
+        return;
+      }
+      if (existing) {
+        const i = goals.findIndex((g) => g.id === existing.id);
+        goals[i] = { id: existing.id, createdAt: existing.createdAt, ...(existing.demo ? { demo: true } : {}), ...G.finalize(d) };
+        saveGoals();
+        renderOverview();
+        toast('Ziel aktualisiert');
+      } else {
+        const g = addGoal(d);
+        toast(`Ziel „${G.describe(g)}“ gesetzt`);
+      }
       dlg.close();
     });
+
+    fill(existing || { metric: 'km', target: null, period: 'week', recurring: false });
     $('#editBody').replaceChildren(form);
     dlg.showModal();
-    input.select();
-  });
+    if (presetText) { nl.value = presetText; nl.dispatchEvent(new Event('input')); }
+    if (!existing) nl.focus();
+  }
+
+  $('#addGoalBtn').addEventListener('click', () => openGoal(null));
+
+  /** Toast after saving a run: celebrate reached goals, otherwise show what's left. */
+  function runSavedToast(run, reached) {
+    const go = { label: 'Ansehen', fn: () => showTab('overview') };
+    if (reached.length) return toast(`🎉 Ziel erreicht: ${G.describe(reached[0])}`, go);
+    const next = currentGoals().map((g) => ({ g, p: G.progress(g, runs) }))
+      .filter(({ g, p }) => p.status === 'active' && g.metric !== 'single' && run.date >= p.range.start && run.date <= p.range.end)
+      .sort((a, b) => a.p.remaining / a.g.target - b.p.remaining / b.g.target)[0];
+    toast(`Lauf über ${km2(run.distanceKm)} km gespeichert` + (next ? ` · noch ${amount(next.g.metric, next.p.remaining)} bis „${G.describe(next.g)}“` : ''), go);
+  }
 
   // ============================================================
   //  Persistence actions
   // ============================================================
+  /** Saves a run; returns the goals this run has just completed. */
   async function saveRun(run) {
+    const doneBefore = new Set(currentGoals().filter((g) => G.progress(g, runs).status === 'done').map((g) => g.id));
     await DB.put(run);
     runs = runs.filter((r) => r.id !== run.id).concat(run);
     renderAll();
+    return currentGoals().filter((g) => !doneBefore.has(g.id) && G.progress(g, runs).status === 'done');
   }
   async function deleteRun(id) {
     await DB.del(id);
@@ -925,13 +1172,14 @@
       const v = read();
       if (!v) return false;
       const run = { id: uid(), ...v, photo: item.photo || undefined, rawText: rawText || undefined, createdAt: Date.now() };
-      await saveRun(run);
+      const reached = await saveRun(run);
       removeQueueItem(item);
-      return true;
+      return { run, reached };
     };
     actions.append(
       h('button', { class: 'btn btn-primary', type: 'submit', text: 'Speichern', onclick: async () => {
-        if (await item.save()) toast(`Lauf über ${km2(runs[runs.length - 1].distanceKm)} km gespeichert`, { label: 'Ansehen', fn: () => showTab('overview') });
+        const res = await item.save();
+        if (res) runSavedToast(res.run, res.reached);
       } }),
       h('button', { class: 'btn', type: 'button', text: 'Verwerfen', onclick: () => removeQueueItem(item) }));
 
@@ -986,10 +1234,13 @@
   });
   $('#saveAllBtn').addEventListener('click', async () => {
     let ok = 0, fail = 0;
+    const reached = [];
     for (const item of queue.filter((q) => q.status === 'ready').slice()) {
-      if (await item.save()) ok++; else fail++;
+      const res = await item.save();
+      if (res) { ok++; reached.push(...res.reached); } else fail++;
     }
-    toast(fail ? `${ok} gespeichert, ${fail} unvollständig` : `${ok} Läufe gespeichert`);
+    if (reached.length && !fail) toast(`${ok} Läufe gespeichert · 🎉 Ziel erreicht: ${G.describe(reached[0])}`);
+    else toast(fail ? `${ok} gespeichert, ${fail} unvollständig` : `${ok} Läufe gespeichert`);
   });
 
   const dz = $('#dropzone');
@@ -1021,7 +1272,7 @@
     download(`laufbuch-${todayISO()}.csv`, '﻿' + rows.map((r) => r.map(esc).join(';')).join('\r\n'), 'text/csv;charset=utf-8');
   });
   $('#exportJsonBtn').addEventListener('click', () => {
-    download(`laufbuch-backup-${todayISO()}.json`, JSON.stringify({ app: 'laufbuch', version: 1, exportedAt: new Date().toISOString(), runs }, null, 1), 'application/json');
+    download(`laufbuch-backup-${todayISO()}.json`, JSON.stringify({ app: 'laufbuch', version: 2, exportedAt: new Date().toISOString(), runs, goals }, null, 1), 'application/json');
   });
   $('#importInput').addEventListener('change', async (e) => {
     const file = e.target.files[0];
@@ -1042,9 +1293,20 @@
         await DB.put(clean);
         n++;
       }
+      let ng = 0;
+      if (Array.isArray(data.goals)) {
+        for (const g of data.goals) {
+          if (!g || !G.METRICS.includes(g.metric) || !(g.target > 0) || !G.PERIODS.includes(g.period)) continue;
+          const clean = { id: typeof g.id === 'string' ? g.id : uid(), metric: g.metric, target: +g.target, period: g.period, recurring: !!g.recurring, createdAt: +g.createdAt || Date.now() };
+          if (/^\d{4}-\d{2}-\d{2}$/.test(g.start || '') && /^\d{4}-\d{2}-\d{2}$/.test(g.end || '')) { clean.start = g.start; clean.end = g.end; }
+          goals = goals.filter((x) => x.id !== clean.id).concat(clean);
+          ng++;
+        }
+        saveGoals();
+      }
       runs = await DB.all();
       renderAll();
-      toast(`${n} ${n === 1 ? 'Einheit' : 'Einheiten'} importiert`);
+      toast(`${n} ${n === 1 ? 'Einheit' : 'Einheiten'}${ng ? ` und ${ng} ${ng === 1 ? 'Ziel' : 'Ziele'}` : ''} importiert`);
     } catch {
       toast('Die Datei konnte nicht gelesen werden');
     }
@@ -1070,5 +1332,5 @@
   init();
 
   // Exposed for debugging / tests
-  window.Laufbuch = { get runs() { return runs; }, saveRun, deleteRun };
+  window.Laufbuch = { get runs() { return runs; }, get goals() { return goals; }, saveRun, deleteRun };
 })();

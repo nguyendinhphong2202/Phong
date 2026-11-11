@@ -47,6 +47,30 @@
     <section class="view is-active" id="view-overview" aria-labelledby="h-overview">
       <h1 class="sr-only" id="h-overview">Übersicht</h1>
 
+      <div class="notice warn demo-bar" id="demoBar" hidden>
+        Du siehst Beispieldaten. <button class="link-btn" id="demoRemove">Beispieldaten entfernen</button>
+      </div>
+
+      <div class="card goals-card" id="goalsCard">
+        <div class="card-head">
+          <h2>Deine Ziele</h2>
+          <button class="btn btn-sm btn-primary" id="addGoalBtn">
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M11 11V5h2v6h6v2h-6v6h-2v-6H5v-2z"/></svg>
+            Ziel
+          </button>
+        </div>
+        <div class="goal-list" id="goalList"></div>
+        <div class="goal-empty" id="goalEmpty" hidden>
+          <p>Setz dir ein Ziel. Die App zeigt dir, wie weit du bist, was noch fehlt und ob du im Plan liegst.</p>
+          <div class="chips" id="goalChips"></div>
+        </div>
+        <details class="past-goals" id="pastGoals" hidden>
+          <summary>Vergangene Ziele <span class="count" id="pastCount"></span></summary>
+          <ul class="past-list" id="pastGoalList"></ul>
+        </details>
+        <div class="goal-foot" id="goalFoot"><span class="pill good" id="streakPill"></span><span class="pill" id="monthPill"></span></div>
+      </div>
+
       <div class="empty" id="overviewEmpty" hidden>
         <div class="empty-art" aria-hidden="true">🏃</div>
         <h2>Noch keine Läufe</h2>
@@ -56,24 +80,6 @@
       </div>
 
       <div id="overviewContent">
-        <div class="notice warn demo-bar" id="demoBar" hidden>
-          Du siehst Beispieldaten. <button class="link-btn" id="demoRemove">Beispieldaten entfernen</button>
-        </div>
-        <div class="card week-card">
-          <div class="week-head">
-            <div>
-              <div class="eyebrow">Diese Woche</div>
-              <div class="week-value"><span class="big" id="weekKm">0</span> <span class="unit">/ <button class="goal-btn" id="goalBtn" title="Wochenziel ändern"><span id="weekGoal">20</span> km</button></span></div>
-            </div>
-            <div class="week-side">
-              <div class="pill" id="streakPill"></div>
-              <div class="pill" id="monthPill"></div>
-            </div>
-          </div>
-          <div class="progress" role="progressbar" aria-label="Wochenziel" aria-valuemin="0" aria-valuemax="100" id="weekProgress"><span></span></div>
-          <div class="week-foot" id="weekFoot"></div>
-        </div>
-
         <div class="kpis">
           <div class="kpi"><div class="kpi-label">Gesamtstrecke</div><div class="kpi-value"><span id="kpiKm">0</span><small>km</small></div></div>
           <div class="kpi"><div class="kpi-label">Läufe</div><div class="kpi-value"><span id="kpiRuns">0</span></div></div>
@@ -212,6 +218,7 @@
   </template>
 
   <script src="parser.js"></script>
+  <script src="goals.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

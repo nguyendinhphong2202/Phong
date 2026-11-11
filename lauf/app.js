@@ -65,6 +65,86 @@
     return hrs ? `${hrs} h ${min} min` : `${min} min`;
   }
 
+  // ---------- Flitzi, the mascot ----------
+  const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  /** mood: 'idle' (waves), 'run', 'cheer' */
+  function mascot(mood = 'idle', size = 96) {
+    const wrap = document.createElement('span');
+    wrap.innerHTML = `<svg class="mascot mascot--${mood}" viewBox="0 0 120 120" width="${size}" height="${size}" aria-hidden="true">
+      <ellipse class="m-shadow" cx="60" cy="112" rx="24" ry="4.5"/>
+      <g class="m-all">
+        <g class="m-leg m-leg-l"><path class="m-limb" d="M49 88v13"/><ellipse class="m-shoe" cx="51.5" cy="104" rx="8.5" ry="5"/></g>
+        <g class="m-leg m-leg-r"><path class="m-limb" d="M71 88v13"/><ellipse class="m-shoe" cx="73.5" cy="104" rx="8.5" ry="5"/></g>
+        <g class="m-body">
+          <path class="m-limb m-arm-l" d="M28 64q-9 5-11 15"/>
+          <path class="m-limb m-arm-r" d="M92 64q9 5 11 15"/>
+          <ellipse class="m-blob" cx="60" cy="60" rx="36" ry="33"/>
+          <ellipse class="m-shine" cx="44" cy="40" rx="9" ry="5" transform="rotate(-28 44 40)"/>
+          <path class="m-band" d="M27 47q33-13 66 0l-1.5 8.5q-31.5-11.5-63 0z"/>
+          <path class="m-knot" d="M91 47l13-7-3 10 8 6-14 1z"/>
+          <g class="m-eyes">
+            <ellipse class="m-eye" cx="47" cy="66" rx="4.2" ry="5.6"/><ellipse class="m-eye" cx="73" cy="66" rx="4.2" ry="5.6"/>
+            <circle class="m-glint" cx="48.5" cy="64" r="1.5"/><circle class="m-glint" cx="74.5" cy="64" r="1.5"/>
+            <path class="m-happy" d="M42 67q5-7 10 0M68 67q5-7 10 0"/>
+          </g>
+          <circle class="m-cheek" cx="37" cy="76" r="6"/><circle class="m-cheek" cx="83" cy="76" r="6"/>
+          <path class="m-mouth" d="M54 76q6 6 12 0"/>
+          <path class="m-mouth-open" d="M52 75q8 12 16 0z"/>
+        </g>
+      </g>
+    </svg>`;
+    return wrap.firstElementChild;
+  }
+  function setMascot(el, mood, size) {
+    if (el.dataset.mood === mood) return;
+    el.dataset.mood = mood;
+    el.replaceChildren(mascot(mood, size || +el.dataset.size || 96));
+  }
+
+  function confetti(n = 80) {
+    if (reducedMotion()) return;
+    const box = h('div', { class: 'confetti', 'aria-hidden': 'true' });
+    const colors = ['#ff8fab', '#86dcc0', '#ffcf5c', '#a9c8ff', '#c9b6ff', '#ffb38a'];
+    const rnd = (a, b) => a + Math.random() * (b - a);
+    for (let i = 0; i < n; i++) {
+      const heart = i % 10 === 0;
+      const el = h('i', { class: heart ? 'heart emo' : i % 3 === 0 ? 'round' : '', text: heart ? '💖' : '' });
+      el.style.cssText = `left:${rnd(0, 100)}%;--x:${rnd(-140, 140)}px;--r:${rnd(-900, 900)}deg;--t:${rnd(1.8, 3.4)}s;--d:${rnd(0, .5)}s;` +
+        (heart ? '' : `background:${colors[i % colors.length]};width:${rnd(8, 15)}px;height:${rnd(8, 18)}px`);
+      box.append(el);
+    }
+    document.body.append(box);
+    setTimeout(() => box.remove(), 4400);
+  }
+
+  /** Big happy moment: Flitzi jumps, confetti falls. */
+  function celebrate(title, strongText, rest = '') {
+    $('.cheer')?.remove();
+    const overlay = h('div', { class: 'cheer', role: 'status' },
+      h('div', { class: 'cheer-card' }, mascot('cheer', 132), h('h2', { text: title }),
+        h('p', {}, h('strong', { text: strongText }), rest)));
+    const close = () => { overlay.classList.add('out'); setTimeout(() => overlay.remove(), 350); };
+    overlay.addEventListener('click', close);
+    document.body.append(overlay);
+    confetti();
+    setTimeout(close, 4000);
+  }
+
+  /** Counts a number up to its new value. */
+  function countTo(el, value, fmt) {
+    const from = el._v ?? 0;
+    el._v = value;
+    cancelAnimationFrame(el._raf);
+    if (reducedMotion() || from === value || !isFinite(value)) { el.textContent = fmt(value); return; }
+    const t0 = performance.now();
+    const tick = (now) => {
+      const k = Math.min(1, (now - t0) / 900);
+      el.textContent = fmt(from + (value - from) * (1 - Math.pow(1 - k, 3)));
+      if (k < 1) el._raf = requestAnimationFrame(tick);
+    };
+    el._raf = requestAnimationFrame(tick);
+  }
+
   // ---------- Storage (IndexedDB, falls back to memory + localStorage) ----------
   const DB = (() => {
     let dbp = null;
@@ -140,7 +220,7 @@
   function applyTheme() {
     const t = prefs.theme || (mq.matches ? 'dark' : 'light');
     document.documentElement.dataset.theme = t;
-    $('meta[name="theme-color"]').setAttribute('content', t === 'dark' ? '#121315' : '#f6f5f3');
+    $('meta[name="theme-color"]').setAttribute('content', t === 'dark' ? '#211a25' : '#fff6ee');
   }
   mq.addEventListener?.('change', () => { if (!prefs.theme) { applyTheme(); renderOverview(); } });
   $('#themeToggle').addEventListener('click', () => {
@@ -251,14 +331,16 @@
     $('#overviewContent').hidden = empty;
     $('#demoBar').hidden = !runs.some((r) => r.demo) && !goals.some((g) => g.demo);
     const st = stats();
+    renderHero(st);
     renderGoals(st);
     if (empty) return;
 
     // KPIs
-    $('#kpiKm').textContent = st.totalKm >= 1000 ? nf0.format(st.totalKm) : km1(st.totalKm);
-    $('#kpiRuns').textContent = nf0.format(st.count);
-    $('#kpiTime').textContent = st.totalSec >= 10 * 3600 ? `${nf1.format(st.totalSec / 3600)} h` : fmtHours(st.totalSec);
-    $('#kpiPace').textContent = st.avgPace ? P.formatPace(st.avgPace) : '–';
+    countTo($('#kpiKm'), st.totalKm, (v) => (st.totalKm >= 1000 ? nf0.format(v) : km1(v)));
+    countTo($('#kpiRuns'), st.count, (v) => nf0.format(Math.round(v)));
+    countTo($('#kpiTime'), st.totalSec, (v) => (st.totalSec >= 10 * 3600 ? `${nf1.format(v / 3600)} h` : fmtHours(v)));
+    if (st.avgPace) countTo($('#kpiPace'), st.avgPace, (v) => P.formatPace(v));
+    else $('#kpiPace').textContent = '–';
 
     renderWeekChart(st);
     renderPaceChart();
@@ -266,6 +348,20 @@
 
     const recent = $('#recentList');
     recent.replaceChildren(...sortedRuns().slice(0, 5).map((r) => runItem(r)));
+  }
+
+  function renderHero(st) {
+    const hr = new Date().getHours();
+    const [greet, emo] = hr < 5 || hr >= 22 ? ['Hallo, Nachteule!', '🌙'] : hr < 11 ? ['Guten Morgen!', '☀️'] : hr < 17 ? ['Hallo!', '👋'] : ['Guten Abend!', '🌇'];
+    $('#heroTitle').textContent = `${greet} ${emo}`;
+    const ranToday = runs.some((r) => r.date === todayISO());
+    let sub;
+    if (!runs.length) sub = 'Ich bin Flitzi! Zeig mir deinen ersten Lauf, dann legen wir zusammen los.';
+    else if (ranToday) sub = 'Du warst heute schon laufen – ich bin richtig stolz auf dich! 💖';
+    else if (st.streak >= 2) sub = `${st.streak} Wochen in Folge aktiv – bleib dran, du machst das toll!`;
+    else sub = 'Schön, dass du da bist. Lust auf eine kleine Runde?';
+    $('#heroSub').textContent = sub;
+    setMascot($('.hero-mascot'), ranToday ? 'cheer' : 'run');
   }
 
   function niceMax(v) {
@@ -282,8 +378,10 @@
     return `M${x},${y + hgt}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + hgt}Z`;
   }
 
+  let animateCharts = true; // off while re-rendering on resize
   function renderWeekChart(st) {
     const box = $('#chartWeeks');
+    box.classList.toggle('animate', animateCharts && !reducedMotion());
     const W = box.clientWidth || 480, H = box.clientHeight || 220;
     const m = { t: 18, r: 8, b: 24, l: 34 };
     const iw = W - m.l - m.r, ih = H - m.t - m.b;
@@ -325,7 +423,7 @@
       hit.addEventListener('pointerleave', hideTip);
       hit.addEventListener('blur', hideTip);
       svg.append(hit);
-      svg.append(s('path', { class: 'bar' + (isCur ? ' current' : ''), d: roundedTopBar(x, y(w.km), bw, y(0) - y(w.km), 4) }));
+      svg.append(s('path', { class: 'bar' + (isCur ? ' current' : ''), d: roundedTopBar(x, y(w.km), bw, y(0) - y(w.km), Math.min(10, bw / 2)), style: `animation-delay:${i * 45}ms` }));
       if ((isCur || i === maxIdx) && w.km > 0) {
         const t = s('text', { class: 'bar-label', x: cx, y: y(w.km) - 6, 'text-anchor': 'middle' });
         t.textContent = km1(w.km);
@@ -356,9 +454,11 @@
     const trendEl = $('#paceTrend');
     if (pts.length < 2) {
       trendEl.textContent = 'letzte 20 Läufe';
-      box.replaceChildren(h('div', { class: 'chart-empty', text: 'Ab zwei Läufen siehst du hier, wie sich deine Pace entwickelt.' }));
+      box.replaceChildren(h('div', { class: 'chart-empty' }, h('i', { class: 'emo', text: '🐣' }),
+        h('span', { text: 'Nach zwei Läufen zeige ich dir hier, wie du immer flotter wirst.' })));
       return;
     }
+    box.classList.toggle('animate', animateCharts && !reducedMotion());
     const W = box.clientWidth || 480, H = box.clientHeight || 220;
     const m = { t: 14, r: 12, b: 24, l: 42 };
     const iw = W - m.l - m.r, ih = H - m.t - m.b;
@@ -401,10 +501,10 @@
     const path = pts.map((d, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(d.p).toFixed(1)}`).join('');
     svg.append(s('path', { class: 'area', d: `${path}L${x(n - 1)},${y(hi)}L${x(0)},${y(hi)}Z` }));
     if (n >= 3) svg.append(s('line', { class: 'trend', x1: x(0), y1: y(t0), x2: x(n - 1), y2: y(t1) }));
-    svg.append(s('path', { class: 'line', d: path }));
+    svg.append(s('path', { class: 'line', d: path, pathLength: 1 }));
     const cross = s('line', { class: 'crosshair', y1: m.t, y2: m.t + ih, visibility: 'hidden' });
     svg.append(cross);
-    const dots = pts.map((d, i) => { const c = s('circle', { class: 'dot', cx: x(i), cy: y(d.p), r: 4 }); svg.append(c); return c; });
+    const dots = pts.map((d, i) => { const c = s('circle', { class: 'dot', cx: x(i), cy: y(d.p), r: 4.5, style: `animation-delay:${200 + i * 45}ms` }); svg.append(c); return c; });
 
     // Crosshair + tooltip: nearest point to the pointer
     const overlay = s('rect', { class: 'hit', x: m.l - 10, y: 0, width: iw + 20, height: H, tabindex: 0, 'aria-label': 'Pace-Verlauf – mit Pfeiltasten durchgehen' });
@@ -445,10 +545,10 @@
     const fastest = by((r) => (pace(r) ? -pace(r) : null), (r) => r.distanceKm >= minDist);
     const longestTime = by((r) => r.durationSec || null);
     const items = [
-      longest && ['Längster Lauf', km2(longest.distanceKm), 'km', fmtDate(longest.date, { day: 'numeric', month: 'short', year: 'numeric' })],
-      fastest && [`Schnellste Pace${minDist ? ' (ab 3 km)' : ''}`, P.formatPace(pace(fastest)), '/km', `${km2(fastest.distanceKm)} km · ${fmtDate(fastest.date, { day: 'numeric', month: 'short', year: 'numeric' })}`],
-      longestTime && ['Längste Dauer', P.formatDuration(longestTime.durationSec), '', fmtDate(longestTime.date, { day: 'numeric', month: 'short', year: 'numeric' })],
-      st.bestWeek && ['Stärkste Woche', km1(st.bestWeek.km), 'km', `KW ${isoWeek(parseISO(st.bestWeek.key))} · ${parseISO(st.bestWeek.key).getFullYear()}`],
+      longest && ['🏅 Längster Lauf', km2(longest.distanceKm), 'km', fmtDate(longest.date, { day: 'numeric', month: 'short', year: 'numeric' })],
+      fastest && [`🚀 Schnellste Pace${minDist ? ' (ab 3 km)' : ''}`, P.formatPace(pace(fastest)), '/km', `${km2(fastest.distanceKm)} km · ${fmtDate(fastest.date, { day: 'numeric', month: 'short', year: 'numeric' })}`],
+      longestTime && ['⏳ Längste Dauer', P.formatDuration(longestTime.durationSec), '', fmtDate(longestTime.date, { day: 'numeric', month: 'short', year: 'numeric' })],
+      st.bestWeek && ['💪 Stärkste Woche', km1(st.bestWeek.km), 'km', `KW ${isoWeek(parseISO(st.bestWeek.key))} · ${parseISO(st.bestWeek.key).getFullYear()}`],
     ].filter(Boolean);
     $('#records').replaceChildren(...items.map(([label, value, unit, date]) =>
       h('div', { class: 'record' },
@@ -460,11 +560,12 @@
   // ============================================================
   //  Run list
   // ============================================================
+  const TYPE_EMOJI = { Lauf: '🏃', Intervall: '⚡', Trail: '🌲', Laufband: '🏠', Wettkampf: '🏅', Gehen: '🚶' };
   function runItem(r) {
     const p = pace(r);
     const thumb = r.photo
       ? h('img', { class: 'run-thumb', src: r.photo, alt: '', loading: 'lazy' })
-      : h('div', { class: 'run-thumb', 'aria-hidden': 'true', text: parseISO(r.date).toLocaleDateString('de-DE', { weekday: 'short' }).replace('.', '') });
+      : h('div', { class: 'run-thumb', 'data-type': r.type || 'Lauf', 'aria-hidden': 'true', text: parseISO(r.date).toLocaleDateString('de-DE', { weekday: 'short' }).replace('.', '') });
     const meta = [
       r.durationSec ? P.formatDuration(r.durationSec) : null,
       p ? `${P.formatPace(p)} /km` : null,
@@ -475,7 +576,7 @@
       h('button', { class: 'run-item', type: 'button', onclick: () => openEdit(r.id) },
         thumb,
         h('div', { class: 'run-main' },
-          h('div', { class: 'run-title', text: `${r.type || 'Lauf'} · ${fmtDate(r.date)}${r.note ? ' · ' + r.note : ''}` }),
+          h('div', { class: 'run-title', text: `${TYPE_EMOJI[r.type] || '🏃'} ${r.type || 'Lauf'} · ${fmtDate(r.date)}${r.note ? ' · ' + r.note : ''}` }),
           h('div', { class: 'run-meta' }, ...meta.map((t) => h('span', { text: t })))),
         h('div', { class: 'run-km' }, km2(r.distanceKm), h('small', { text: 'km' }))));
   }
@@ -568,7 +669,7 @@
       const i = field.querySelector('.src');
       if (!i) return;
       i.className = 'src' + (src ? ' ' + src : '');
-      i.textContent = src === 'ocr' ? 'erkannt' : src === 'calc' ? 'berechnet' : '';
+      i.textContent = src === 'ocr' ? 'erkannt ✨' : src === 'calc' ? 'berechnet' : '';
       field.classList.toggle('is-ocr', src === 'ocr');
     };
     for (const k of FIELD_KEYS) if (sources[k]) badge(k, sources[k]);
@@ -637,7 +738,8 @@
         for (const k of Object.keys(INT_FIELDS)) if (v[k] == null) delete updated[k];
         const reached = await saveRun(updated);
         dlg.close();
-        toast(reached.length ? `Gespeichert · 🎉 Ziel erreicht: ${G.describe(reached[0])}` : 'Änderungen gespeichert');
+        if (reached.length) celebrate('Juhu, geschafft!', G.describe(reached[0]), ' – Ziel erreicht!');
+        else toast('Gespeichert ✨');
       } }),
       h('button', { class: 'btn', type: 'button', text: 'Abbrechen', onclick: () => dlg.close() }),
       h('span', { class: 'spacer' }),
@@ -699,7 +801,7 @@
     let meta;
     let plan = null;
     if (status === 'done') {
-      meta = p.isCurrent ? 'Geschafft – stark! 🎉' : `Erreicht mit ${amount(g.metric, p.value)}`;
+      meta = p.isCurrent ? 'Geschafft – du bist super! 🎉' : `Erreicht mit ${amount(g.metric, p.value)}`;
     } else if (status === 'upcoming') {
       const tm = new Date(); tm.setDate(tm.getDate() + 1);
       meta = `startet ${p.range.start === P.iso(tm) ? 'morgen' : 'am ' + fmtDate(p.range.start, { day: 'numeric', month: 'short' })}`;
@@ -714,14 +816,15 @@
       meta = parts.join(' · ');
       if (p.totalDays > 1 && g.metric !== 'single') {
         const diff = p.value - p.expected;
-        if (Math.abs(diff) <= g.target * 0.03) plan = ['Im Plan', ''];
-        else if (diff > 0) plan = [`${amount(g.metric, diff)} vor Plan`, 'ahead'];
-        else plan = [`${amount(g.metric, -diff)} hinter Plan`, 'behind'];
+        if (Math.abs(diff) <= g.target * 0.03) plan = ['👍 Voll im Plan', ''];
+        else if (diff > 0) plan = [`🚀 ${amount(g.metric, diff)} vor Plan`, 'ahead'];
+        else plan = [`${amount(g.metric, -diff)} hinter Plan – du packst das! 💪`, 'behind'];
       }
     }
     const showMarker = status === 'active' && p.totalDays > 1 && g.metric !== 'single';
-    return h('button', { class: `goal is-${status}`, type: 'button', onclick: () => openGoal(g.id) },
-      h('div', { class: 'goal-head' }, h('span', { class: 'goal-title', text: G.describe(g) })),
+    const ico = { km: '🛣️', runs: '👟', time: '⏱️', single: '🏅' }[g.metric];
+    return h('button', { class: `goal is-${status}`, 'data-metric': g.metric, type: 'button', onclick: () => openGoal(g.id) },
+      h('div', { class: 'goal-head' }, h('span', { class: 'goal-ico emo', 'aria-hidden': 'true', text: ico }), h('span', { class: 'goal-title', text: G.describe(g) })),
       h('div', { class: 'goal-value' },
         h('strong', { text: shortValue(g.metric, p.value) }),
         h('span', { class: 'goal-of', text: `/ ${amount(g.metric, g.target)}` }),
@@ -744,7 +847,7 @@
     if (!cur.length) {
       $('#goalChips').replaceChildren(...CHIP_GOALS.map((t) => h('button', { class: 'chip', type: 'button', text: '+ ' + t, onclick: () => {
         const g = addGoal(G.parseGoalText(t, new Date()));
-        toast(`Ziel „${G.describe(g)}“ hinzugefügt`, { label: 'Rückgängig', fn: () => removeGoal(g.id) });
+        toast(`Ziel gesetzt: ${G.describe(g)} 🎯`, { label: 'Rückgängig', fn: () => removeGoal(g.id) });
       } })));
     }
 
@@ -760,10 +863,10 @@
         h('span', { class: 'past-val', text: `${amount(g.metric, p.value)} / ${amount(g.metric, g.target)}` })));
     }));
 
-    $('#streakPill').textContent = st.streak >= 2 ? `${st.streak} Wochen in Folge aktiv` : '';
+    $('#streakPill').textContent = st.streak >= 2 ? `🔥 ${st.streak} Wochen in Folge aktiv` : '';
     let mt = '';
     if (runs.length) {
-      mt = `${new Date().toLocaleDateString('de-DE', { month: 'long' })}: ${km1(st.thisMonth.km)} km`;
+      mt = `📅 ${new Date().toLocaleDateString('de-DE', { month: 'long' })}: ${km1(st.thisMonth.km)} km`;
       if (st.lastMonth.km > 0) {
         const diff = Math.round(((st.thisMonth.km - st.lastMonth.km) / st.lastMonth.km) * 100);
         mt += ` · ${diff >= 0 ? '+' : '−'}${Math.abs(diff)} % zum Vormonat`;
@@ -887,7 +990,7 @@
         toast('Ziel aktualisiert');
       } else {
         const g = addGoal(d);
-        toast(`Ziel „${G.describe(g)}“ gesetzt`);
+        toast(`Ziel gesetzt: ${G.describe(g)} 🎯`);
       }
       dlg.close();
     });
@@ -904,11 +1007,11 @@
   /** Toast after saving a run: celebrate reached goals, otherwise show what's left. */
   function runSavedToast(run, reached) {
     const go = { label: 'Ansehen', fn: () => showTab('overview') };
-    if (reached.length) return toast(`🎉 Ziel erreicht: ${G.describe(reached[0])}`, go);
+    if (reached.length) return celebrate('Juhu, geschafft!', G.describe(reached[0]), reached.length > 1 ? ` und ${reached.length - 1} weiteres Ziel erreicht` : ' – Ziel erreicht!');
     const next = currentGoals().map((g) => ({ g, p: G.progress(g, runs) }))
       .filter(({ g, p }) => p.status === 'active' && g.metric !== 'single' && run.date >= p.range.start && run.date <= p.range.end)
       .sort((a, b) => a.p.remaining / a.g.target - b.p.remaining / b.g.target)[0];
-    toast(`Lauf über ${km2(run.distanceKm)} km gespeichert` + (next ? ` · noch ${amount(next.g.metric, next.p.remaining)} bis „${G.describe(next.g)}“` : ''), go);
+    toast(`Super, ${km2(run.distanceKm)} km gespeichert! 👟` + (next ? ` · noch ${amount(next.g.metric, next.p.remaining)} bis „${G.describe(next.g)}“` : ''), go);
   }
 
   // ============================================================
@@ -1099,13 +1202,14 @@
   }
 
   const STATUS_TEXT = {
-    'loading tesseract core': 'Texterkennung wird geladen …',
-    'initializing tesseract': 'Texterkennung wird gestartet …',
-    'loading language traineddata': 'Sprachdaten werden geladen (einmalig) …',
-    'initializing api': 'Texterkennung wird gestartet …',
-    'recognizing text': 'Text wird erkannt …',
-    'second pass': 'Zweiter Durchgang für fehlende Werte …',
+    'loading tesseract core': 'Flitzi setzt die Lesebrille auf …',
+    'initializing tesseract': 'Flitzi setzt die Lesebrille auf …',
+    'loading language traineddata': 'Flitzi lernt noch schnell lesen (nur beim ersten Mal) …',
+    'initializing api': 'Flitzi macht sich bereit …',
+    'recognizing text': 'Flitzi liest deine Werte …',
+    'second pass': 'Flitzi schaut noch mal ganz genau hin …',
   };
+
 
   function updateQueueHead() {
     const ready = queue.filter((q) => q.status === 'ready').length;
@@ -1117,8 +1221,8 @@
 
   function addQueueItem({ file = null, photo = null } = {}) {
     const item = { id: uid(), file, status: 'loading', photo };
-    const photoBox = h('div', { class: 'q-photo' }, h('div', { class: 'no-photo', text: 'Ohne Foto' }));
-    const status = h('div', { class: 'q-status' }, h('span', { class: 'spinner' }), h('span', { text: 'Bild wird vorbereitet …' }));
+    const photoBox = h('div', { class: 'q-photo' }, h('div', { class: 'no-photo' }, h('i', { class: 'emo', text: '✏️' }), 'Von Hand eingetragen'));
+    const status = h('div', { class: 'q-status' }, mascot('run', 44), h('span', { text: 'Flitzi schnappt sich dein Bild …' }));
     const bar = h('div', { class: 'q-progress' }, h('span'));
     const body = h('div', { class: 'q-body' }, status, bar);
     item.el = h('article', { class: 'card q-item' }, photoBox, body);
@@ -1146,8 +1250,8 @@
     item.bar.remove();
     const notices = [];
     if (parsed) {
-      if (!parsed.isRun) notices.push(h('div', { class: 'notice warn', text: 'In diesem Bild wurden keine Laufdaten gefunden. Du kannst die Werte unten selbst eintragen.' }));
-      else notices.push(h('div', { class: 'notice good', text: `${parsed.recognized} ${parsed.recognized === 1 ? 'Wert' : 'Werte'} automatisch erkannt – bitte kurz prüfen.` }));
+      if (!parsed.isRun) notices.push(h('div', { class: 'notice warn', text: 'Hm, hier habe ich keine Laufdaten gefunden 🙈 Trag die Werte einfach unten ein.' }));
+      else notices.push(h('div', { class: 'notice good', text: `✨ ${parsed.recognized} ${parsed.recognized === 1 ? 'Wert' : 'Werte'} erkannt – schau kurz drüber, ob alles stimmt.` }));
       parsed.warnings.forEach((w) => notices.push(h('div', { class: 'notice warn', text: w })));
     }
     const values = parsed || {};
@@ -1200,7 +1304,7 @@
       item.photo = thumb.toDataURL('image/jpeg', 0.78);
       item.photoBox.replaceChildren(h('img', { src: item.photo, alt: 'Hochgeladenes Bild' }));
       const canvas = prepareForOcr(img);
-      setStatus(item, 'Warte auf Texterkennung …', 0.02);
+      setStatus(item, 'Gleich bist du dran …', 0.02);
       const res = await recognize(canvas, (m) => {
         const txt = STATUS_TEXT[m.status];
         if (!txt) return;
@@ -1214,7 +1318,7 @@
       console.error(e);
       item.statusEl.remove();
       item.bar.remove();
-      item.body.prepend(h('div', { class: 'notice warn', text: (e && e.message && /online|geladen/.test(e.message)) ? e.message + ' Du kannst die Werte trotzdem manuell eintragen.' : 'Das Bild konnte nicht ausgelesen werden. Trage die Werte bitte manuell ein.' }));
+      item.body.prepend(h('div', { class: 'notice warn', text: (e && e.message && /online|geladen/.test(e.message)) ? e.message + ' Du kannst die Werte trotzdem von Hand eintragen.' : 'Ups, das Bild konnte ich nicht lesen 🙈 Trag die Werte bitte kurz selbst ein.' }));
       showForm(item, null, '');
     }
   }
@@ -1239,8 +1343,8 @@
       const res = await item.save();
       if (res) { ok++; reached.push(...res.reached); } else fail++;
     }
-    if (reached.length && !fail) toast(`${ok} Läufe gespeichert · 🎉 Ziel erreicht: ${G.describe(reached[0])}`);
-    else toast(fail ? `${ok} gespeichert, ${fail} unvollständig` : `${ok} Läufe gespeichert`);
+    if (reached.length) celebrate('Juhu, geschafft!', G.describe(reached[0]), ' – Ziel erreicht!');
+    toast(fail ? `${ok} gespeichert, bei ${fail} fehlt noch etwas` : `${ok} Läufe gespeichert 🎉`);
   });
 
   const dz = $('#dropzone');
@@ -1314,7 +1418,7 @@
 
   // ---------- Resize charts ----------
   let rz;
-  const ro = new ResizeObserver(() => { clearTimeout(rz); rz = setTimeout(() => { if ($('#view-overview').classList.contains('is-active') && runs.length) { renderWeekChart(stats()); renderPaceChart(); } }, 120); });
+  const ro = new ResizeObserver(() => { clearTimeout(rz); rz = setTimeout(() => { if ($('#view-overview').classList.contains('is-active') && runs.length) { animateCharts = false; renderWeekChart(stats()); renderPaceChart(); animateCharts = true; } }, 120); });
   ro.observe($('#chartWeeks'));
 
   // Escape closes dialog is native; Esc also hides tooltip
@@ -1324,6 +1428,7 @@
   async function init() {
     loadPrefs();
     applyTheme();
+    $$('[data-mascot]').forEach((el) => setMascot(el, el.dataset.mascot));
     runs = await DB.all();
     renderRuns();
     const tab = Object.keys(TAB_HASH).find((k) => TAB_HASH[k] === location.hash) || 'overview';

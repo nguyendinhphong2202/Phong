@@ -3,7 +3,7 @@
 Eine Lauf-Tracking-Web-App, die **Screenshots und Fotos deiner Läufe automatisch
 ausliest**, die Einheiten speichert und deine Fortschritte anzeigt.
 
-![Übersicht](docs/uebersicht-dunkel.png)
+![Übersicht](docs/uebersicht.png)
 
 ## Funktionen
 
@@ -31,15 +31,22 @@ ausliest**, die Einheiten speichert und deine Fortschritte anzeigt.
 - **Einheiten**: nach Monaten gruppiert, bearbeiten und löschen (mit
   Rückgängig). Export als CSV (für Excel) oder als JSON-Backup inkl. Fotos,
   JSON-Import.
-- Hell-/Dunkelmodus, für Handys optimiert (Tab-Leiste unten, Kamera-Button).
+- **Süßes, freundliches Design**: Pastellfarben, runde Formen und Schrift,
+  Maskottchen „Flitzi“ (läuft, winkt, jubelt), federnde Animationen,
+  Konfetti bei erreichten Zielen, Begrüßung je nach Tageszeit. Animationen
+  werden abgeschaltet, wenn das Gerät „Bewegung reduzieren“ eingestellt hat.
+- Hell-/Dunkelmodus, für Handys optimiert (schwebende Tab-Leiste, großer
+  Kamera-Button).
 
 Getestet mit typischen Layouts von Strava, Garmin Connect, Apple Fitness, Nike
 Run Club u. a. (Beschriftung über oder unter dem Wert, mehrspaltig, helle und
 dunkle Screenshots).
 
-![Ziele](docs/ziele.png)
-
 ![Erfassen](docs/erfassen.png)
+
+| Ziel erreicht | Handy, Dunkelmodus |
+|---|---|
+| ![Ziel erreicht](docs/geschafft.png) | ![Handy](docs/handy-dunkel.png) |
 
 ## Starten
 

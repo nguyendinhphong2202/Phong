@@ -48,7 +48,40 @@ dunkle Screenshots).
 |---|---|
 | ![Ziel erreicht](docs/geschafft.png) | ![Handy](docs/handy-dunkel.png) |
 
-## Starten
+## Aufs iPhone installieren
+
+Laufbuch ist eine installierbare Web-App (PWA): eigenes Symbol auf dem
+Home-Bildschirm, Vollbild ohne Browserleiste, funktioniert auch offline.
+
+**1. Einmalig: App online stellen** (das iPhone braucht eine https-Adresse)
+
+Am einfachsten mit GitHub Pages: im Repository unter **Settings → Pages →
+Build and deployment** bei *Source* „Deploy from a branch“ wählen, den Branch
+mit dem `lauf/`-Ordner und den Ordner `/ (root)` auswählen und speichern. Nach
+ein bis zwei Minuten ist die App unter
+`https://<github-name>.github.io/<repo-name>/lauf/` erreichbar.
+
+**2. Auf dem iPhone**
+
+1. Die Adresse in **Safari** öffnen.
+2. Unten auf **Teilen** tippen (Quadrat mit Pfeil nach oben).
+3. **„Zum Home-Bildschirm“** wählen und mit **„Hinzufügen“** bestätigen.
+
+Die App zeigt diese Schritte auf dem iPhone auch selbst an („So geht's“).
+
+Gut zu wissen:
+
+- Die App auf dem Home-Bildschirm hat einen eigenen Speicher, getrennt von
+  Safari. Vorher im Browser gespeicherte Läufe über **Einheiten → Backup**
+  sichern und in der installierten App **importieren**.
+- Offline funktioniert alles außer der allerersten Fotoerkennung: Dafür werden
+  einmalig ca. 15 MB Erkennungsdaten geladen und danach auf dem Gerät behalten.
+- Export (CSV/Backup) öffnet auf dem iPhone das Teilen-Menü, z. B. „In Dateien
+  sichern“.
+- Auf Android und am Computer (Chrome/Edge) erscheint stattdessen ein
+  „Installieren“-Knopf.
+
+## Starten (am Computer)
 
 Keine Build-Schritte nötig. Im Repo-Ordner:
 
@@ -75,6 +108,7 @@ lauf/
   app.js              Speicher, Fotoaufbereitung, OCR, Statistiken, Diagramme
   parser.js           OCR-Text → Laufdaten (läuft auch in Node)
   goals.js            Ziele: Eingabe in eigenen Worten, Zeiträume, Fortschritt
+  manifest.webmanifest, sw.js, icons/   Installierbarkeit und Offline-Betrieb
   tests/              Parser-Tests
 ```
 
@@ -86,6 +120,5 @@ node --test lauf/tests/*.test.js
 
 ## Mögliche nächste Schritte
 
-- Installierbar als App (PWA mit Offline-Cache)
 - Optional KI-Bilderkennung für schwierige Fotos (z. B. schräg fotografierte Uhr)
 - Synchronisierung zwischen Geräten

@@ -9,7 +9,14 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8F%83%3C/text%3E%3C/svg%3E" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Laufbuch" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="format-detection" content="telephone=no" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -49,6 +56,18 @@
           <p id="heroSub">Schön, dass du da bist.</p>
         </div>
         <div class="hero-mascot" data-mascot="run" data-size="104" aria-hidden="true"></div>
+      </div>
+
+      <div class="install-card" id="installCard" hidden>
+        <span class="install-ico emo" aria-hidden="true">📲</span>
+        <div class="install-text">
+          <strong>Hol dir Laufbuch auf deinen Home-Bildschirm</strong>
+          <span>Mit eigenem Symbol, im Vollbild und auch ohne Internet.</span>
+        </div>
+        <button class="btn btn-primary btn-sm" id="installBtn">So geht's</button>
+        <button class="install-close" id="installDismiss" aria-label="Hinweis ausblenden">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="m12 10.6 5-5 1.4 1.4-5 5 5 5-1.4 1.4-5-5-5 5L5.6 17l5-5-5-5L7 5.6z"/></svg>
+        </button>
       </div>
 
       <div class="notice warn demo-bar" id="demoBar" hidden>

@@ -167,6 +167,7 @@ h1, h2, h3 { font-family: var(--font-num); font-weight: 600; letter-spacing: .00
   position: sticky; top: 0; z-index: 20;
   display: flex; align-items: center; gap: 16px;
   padding: 10px max(16px, calc((100vw - 1080px) / 2));
+  padding-top: calc(10px + env(safe-area-inset-top));
   background: color-mix(in srgb, var(--bg) 82%, transparent);
   backdrop-filter: saturate(1.4) blur(14px);
   -webkit-backdrop-filter: saturate(1.4) blur(14px);
@@ -244,6 +245,32 @@ h1, h2, h3 { font-family: var(--font-num); font-weight: 600; letter-spacing: .00
 .hero::before { right: 150px; top: 14px; }
 .hero::after { right: 34px; bottom: 16px; font-size: 16px; animation-delay: 1.1s; }
 @keyframes twinkle { 0%, 100% { transform: scale(.6) rotate(0); opacity: .3; } 50% { transform: scale(1.2) rotate(40deg); opacity: 1; } }
+
+/* ---------- Install hint ---------- */
+.install-card {
+  display: flex; align-items: center; gap: 12px; padding: 12px 14px; margin-bottom: 16px;
+  border-radius: 22px; background: var(--p-sky); border: 2px dashed color-mix(in srgb, var(--text-mute) 40%, transparent);
+}
+.install-ico { flex: none; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: var(--surface); font-size: 22px; animation: floaty 2.4s ease-in-out infinite; }
+.install-text { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.3; }
+.install-text strong { font-weight: 800; }
+.install-text span { color: var(--text-soft); font-size: 13.5px; font-weight: 600; }
+.install-close { flex: none; display: grid; place-items: center; width: 34px; height: 34px; border: 0; border-radius: 50%; background: none; color: var(--text-soft); }
+.install-close:hover { background: var(--surface); }
+.steps { list-style: none; counter-reset: step; margin: 6px 0 0; padding: 0; display: grid; gap: 10px; }
+.steps li {
+  counter-increment: step; display: grid; grid-template-columns: 38px 1fr; gap: 12px; align-items: center;
+  padding: 12px 14px; border-radius: 20px; background: var(--p-peach); font-weight: 700;
+}
+.steps li:nth-child(2) { background: var(--p-sky); }
+.steps li:nth-child(3) { background: var(--p-mint); }
+.steps li::before {
+  content: counter(step); display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%;
+  background: var(--surface); font-family: var(--font-num); font-weight: 600; font-size: 19px;
+}
+.steps .ios-share { display: inline-block; vertical-align: -5px; margin: 0 2px; color: var(--accent-text); }
+.steps small { display: block; color: var(--text-soft); font-weight: 600; font-size: 13px; }
+.install-note { color: var(--text-soft); font-size: 13.5px; font-weight: 600; margin: 14px 0 0; }
 
 /* ---------- Goals ---------- */
 .goals-card { margin-bottom: 16px; }
@@ -623,7 +650,7 @@ kbd { font: 800 12px var(--font); padding: 1px 7px; border: 2px solid var(--bord
 @media (max-width: 640px) {
   :root { --tabbar-h: 84px; }
   /* backdrop-filter would make the fixed tab bar position relative to the header */
-  .topbar { padding: 10px 16px; backdrop-filter: none; -webkit-backdrop-filter: none; background: var(--bg); }
+  .topbar { padding: calc(10px + env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 10px max(16px, env(safe-area-inset-left)); backdrop-filter: none; -webkit-backdrop-filter: none; background: var(--bg); }
   .topbar .icon-btn { margin-left: auto; }
   .tabs {
     position: fixed; left: 12px; right: 12px; bottom: calc(10px + env(safe-area-inset-bottom)); z-index: 30; margin: 0;
@@ -656,6 +683,16 @@ kbd { font: 800 12px var(--font); padding: 1px 7px; border: 2px solid var(--bord
   .run-list.compact .run-meta span:nth-child(n+4) { display: none; }
   .dialog { max-height: calc(100vh - 16px); }
   .view-title { font-size: 26px; }
+  /* iOS zooms the page when a focused field is smaller than 16px */
+  .field input, .field select { font-size: 16px; }
+  .install-card { flex-wrap: wrap; }
+  .install-text { flex-basis: calc(100% - 110px); }
+  .install-card .btn { margin-left: 56px; }
+}
+/* installed app: no text selection flicker on taps, no rubber-band pull on the bar */
+@media (display-mode: standalone) {
+  body { -webkit-tap-highlight-color: transparent; overscroll-behavior-y: none; }
+  .tab-btn, .btn, .chip, .goal { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {

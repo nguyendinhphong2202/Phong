@@ -1362,7 +1362,14 @@
   // ============================================================
   //  Export / import
   // ============================================================
-  function download(name, content, type) {
+  async function download(name, content, type) {
+    if (isIOS() && navigator.canShare) {
+      const file = new File([content], name, { type: type.split(';')[0] });
+      if (navigator.canShare({ files: [file] })) {
+        try { await navigator.share({ files: [file], title: name }); } catch {}
+        return;
+      }
+    }
     const a = h('a', { href: URL.createObjectURL(new Blob([content], { type })), download: name });
     document.body.append(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 2000);
@@ -1424,12 +1431,75 @@
   // Escape closes dialog is native; Esc also hides tooltip
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideTip(); });
 
+  // ============================================================
+  //  Install on the home screen
+  //  iPhone/iPad: no install prompt exists – people add the app via
+  //  Safari's share menu, so we show them how. Android and desktop
+  //  Chrome offer a native prompt (beforeinstallprompt).
+  // ============================================================
+  const isStandalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  let installEvent = null;
+
+  function updateInstallCard() {
+    const show = !isStandalone() && !prefs.installDismissed && (isIOS() || !!installEvent);
+    $('#installCard').hidden = !show;
+    $('#installBtn').textContent = installEvent ? 'Installieren' : "So geht's";
+  }
+
+  function showIosInstallSteps() {
+    $('#editTitle').textContent = 'Laufbuch aufs iPhone holen';
+    const shareIcon = s('svg', { class: 'ios-share', viewBox: '0 0 24 24', width: 22, height: 22, 'aria-hidden': 'true' });
+    shareIcon.append(s('path', { fill: 'currentColor', d: 'M12 2.5l4.2 4.2-1.4 1.4L13 6.3V15h-2V6.3L9.200 8.100 7.800 6.700 12 2.5zM6 10h3v2H7v7h10v-7h-2v-2h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1z' }));
+    const body = h('div', {},
+      h('ol', { class: 'steps' },
+        h('li', {}, h('div', {}, 'Tippe in Safari unten auf ', shareIcon, h('strong', { text: ' Teilen' }),
+          h('small', { text: 'Das Quadrat mit dem Pfeil nach oben.' }))),
+        h('li', {}, h('div', {}, 'Wähle ', h('strong', { text: '„Zum Home-Bildschirm“' }),
+          h('small', { text: 'Dafür in der Liste etwas nach unten scrollen.' }))),
+        h('li', {}, h('div', {}, 'Tippe oben rechts auf ', h('strong', { text: '„Hinzufügen“' }),
+          h('small', { text: 'Fertig – Flitzi wartet dann auf deinem Home-Bildschirm! 🎉' })))),
+      h('p', { class: 'install-note', text: 'Kein Teilen-Symbol zu sehen? Dann öffne diese Seite zuerst in Safari.' }),
+      h('p', { class: 'install-note', text: 'Gut zu wissen: Die App auf dem Home-Bildschirm hat ihren eigenen Speicher. Läufe, die du schon hier im Browser gespeichert hast, nimmst du über „Einheiten → Backup“ und danach „Importieren“ mit.' }),
+      h('div', { class: 'form-actions' }, h('button', { class: 'btn btn-primary', type: 'button', text: 'Alles klar!', onclick: () => dlg.close() })));
+    $('#editBody').replaceChildren(body);
+    dlg.showModal();
+  }
+
+  window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvent = e; updateInstallCard(); });
+  window.addEventListener('appinstalled', () => {
+    installEvent = null;
+    updateInstallCard();
+    celebrate('Juhu, installiert!', 'Laufbuch', ' wohnt jetzt auf deinem Home-Bildschirm.');
+  });
+  $('#installBtn').addEventListener('click', async () => {
+    if (!installEvent) return showIosInstallSteps();
+    installEvent.prompt();
+    try { await installEvent.userChoice; } catch {}
+    installEvent = null;
+    updateInstallCard();
+  });
+  $('#installDismiss').addEventListener('click', () => {
+    prefs.installDismissed = true;
+    savePrefs();
+    updateInstallCard();
+    toast(isIOS() ? 'Okay! Später findest du es im Teilen-Menü von Safari.' : 'Okay! Später findest du es im Menü deines Browsers.');
+  });
+
+  // Offline support (needs https or localhost)
+  if ('serviceWorker' in navigator && (location.protocol === 'https:' || ['localhost', '127.0.0.1'].includes(location.hostname))) {
+    window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch((e) => console.warn('Service Worker', e)));
+  }
+
   // ---------- Boot ----------
   async function init() {
     loadPrefs();
     applyTheme();
     $$('[data-mascot]').forEach((el) => setMascot(el, el.dataset.mascot));
     runs = await DB.all();
+    // Ask the browser to keep the logbook safe from automatic clean-ups
+    if (runs.length && navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+    updateInstallCard();
     renderRuns();
     const tab = Object.keys(TAB_HASH).find((k) => TAB_HASH[k] === location.hash) || 'overview';
     showTab(tab, false);

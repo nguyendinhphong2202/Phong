@@ -43,13 +43,12 @@ ausliest**, die Einheiten speichert und deine Fortschritte anzeigt.
   Zielkarte zeigt Fortschritt, Rest, verbleibende Tage, nötige km pro Tag und
   ob du **vor oder hinter Plan** liegst. Erreichte Ziele werden beim Speichern
   eines Laufs gefeiert, vergangene Ziele landen im Verlauf.
-- **Kraft heute**: tägliche Zähler für Liegestütze, Klimmzüge und Dips mit
-  Tagesziel (Standard je 50, unter „Tagesziele“ änderbar). Zählen mit −1, +1,
-  +5 und +10 oder die Zahl antippen und direkt eingeben. Jede Übung zeigt
-  „noch X“, die letzten 7 Tage als kleine Balken und wird grün, sobald das Ziel
-  erreicht ist; sind alle drei geschafft, gibt es Konfetti. Dazu die Serie
-  „X Tage in Folge alles geschafft“ und die Summe der Woche. Um Mitternacht
-  beginnt ein neuer Tag; die Werte sind im Backup enthalten.
+- **Nebenbei: Kraft**: ganz unten auf der Übersicht, bewusst klein gehalten –
+  das Laufen steht im Mittelpunkt. Tägliche Zähler für Liegestütze, Klimmzüge
+  und Dips (Standard je 50, unter „Tagesziele“ änderbar) mit −, +1, +5, +10
+  oder direkter Eingabe per Antippen der Zahl, schmalem Fortschrittsbalken und
+  den letzten 7 Tagen als kleine Punkte. Darunter eine Zeile mit Serie und
+  Wochensumme. Um Mitternacht beginnt ein neuer Tag; im Backup enthalten.
 - **Fortschritt**: aktive Wochen in Folge,
   Monatsvergleich, Gesamtwerte, Wochenkilometer der letzten 12 Wochen,
   Pace-Entwicklung mit Trendlinie und Bestleistungen.

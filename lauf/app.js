@@ -1143,37 +1143,38 @@
     const target = strength.targets[ex];
     if (!celebrateDone) return;
     if (!wasAll && allDone(iso)) {
-      celebrate('Alles geschafft!', `${EXERCISES.map((e) => strength.targets[e.id]).join(' · ')}`, ' – Liegestütze, Klimmzüge und Dips für heute erledigt! 💪');
+      confetti(40);
+      toast('Kraft für heute komplett – stark! 💪');
     } else if (before < target && v >= target) {
       const e = EXERCISES.find((x) => x.id === ex);
-      confetti(36);
       toast(`${e.name} geschafft – ${v} Stück! ${e.emo}`);
     }
   }
 
   const exEls = {};
   function buildStrength() {
-    const grid = $('#strengthGrid');
+    const list = $('#strengthGrid');
     for (const e of EXERCISES) {
-      const strong = h('strong', { text: '0' });
+      const val = h('strong', { text: '0' });
       const of = h('span', { class: 'ex-of' });
-      const left = h('div', { class: 'ex-left' });
       const fill = h('span');
-      const week = h('div', { class: 'ex-week', role: 'img' });
+      const dots = h('span', { class: 'ex-dots', role: 'img' });
       const btn = (d, label, cls = '') => h('button', { class: `ex-btn ${cls}`, type: 'button', 'aria-label': `${e.name} ${d > 0 ? 'plus' : 'minus'} ${Math.abs(d)}`, text: label, onclick: (ev) => {
         setCount(e.id, countOf(todayISO(), e.id) + d);
         if (d > 0) floatPlus(ev.currentTarget, `+${d}`);
         if (navigator.vibrate) navigator.vibrate(8);
       } });
-      const card = h('div', { class: 'ex', 'data-ex': e.id },
-        h('div', { class: 'ex-head' }, h('span', { class: 'ex-ico emo', 'aria-hidden': 'true', text: e.emo }), h('span', { class: 'ex-name', text: e.name }), h('span', { class: 'ex-check', 'aria-hidden': 'true', text: '✓' })),
-        h('button', { class: 'ex-count', type: 'button', title: 'Antippen, um die Zahl direkt einzugeben', onclick: () => editCount(e) }, strong, of),
-        h('div', { class: 'ex-bar', role: 'progressbar', 'aria-label': e.name, 'aria-valuemin': 0, 'aria-valuemax': 100 }, fill),
-        left,
-        h('div', { class: 'ex-btns' }, btn(-1, '−1', 'minus'), btn(1, '+1'), btn(5, '+5'), btn(10, '+10', 'big')),
-        week);
-      exEls[e.id] = { card, strong, of, left, fill, week };
-      grid.append(card);
+      const row = h('div', { class: 'ex', 'data-ex': e.id },
+        h('span', { class: 'ex-ico emo', 'aria-hidden': 'true', text: e.emo }),
+        h('div', { class: 'ex-main' },
+          h('div', { class: 'ex-line' },
+            h('span', { class: 'ex-name', text: e.name }),
+            h('button', { class: 'ex-count', type: 'button', title: 'Antippen, um die Zahl direkt einzugeben', onclick: () => editCount(e) }, val, of),
+            dots),
+          h('div', { class: 'ex-bar', role: 'progressbar', 'aria-label': e.name, 'aria-valuemin': 0, 'aria-valuemax': 100 }, fill)),
+        h('div', { class: 'ex-btns' }, btn(-1, '−', 'minus'), btn(1, '+1'), btn(5, '+5'), btn(10, '+10')));
+      exEls[e.id] = { row, val, of, fill, dots };
+      list.append(row);
     }
   }
 
@@ -1195,33 +1196,27 @@
     for (const e of EXERCISES) {
       const el = exEls[e.id];
       const v = countOf(iso, e.id), target = strength.targets[e.id];
-      const done = v >= target;
-      el.strong.textContent = v;
-      el.of.textContent = `/ ${target}`;
-      el.left.textContent = done ? (v > target ? `Ziel geschafft – ${v - target} extra! 🎉` : 'Ziel geschafft! 🎉') : `noch ${target - v}`;
-      el.fill.style.width = Math.min(100, (v / target) * 100) + '%';
-      el.fill.parentNode.setAttribute('aria-valuenow', Math.round(Math.min(100, (v / target) * 100)));
-      el.card.classList.toggle('is-done', done);
-      if (changed === e.id) { el.strong.classList.remove('bump'); void el.strong.offsetWidth; el.strong.classList.add('bump'); }
-      // last 7 days: bar height = share of the daily target
-      const cells = days.map((d) => {
-        const di = P.iso(d), n = countOf(di, e.id), share = Math.min(1, n / target);
-        const lbl = `${d.toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'numeric' })}: ${n} von ${target}`;
-        return h('span', { class: `wk${n >= target ? ' full' : ''}${di === iso ? ' today' : ''}`, title: lbl },
-          h('i', { style: `height:${n ? Math.max(4, Math.round(share * 30)) : 0}px` }),
-          h('b', { text: d.toLocaleDateString('de-DE', { weekday: 'narrow' }) }));
-      });
-      el.week.replaceChildren(...cells);
-      el.week.setAttribute('aria-label', `${e.name}, letzte 7 Tage: ` + days.map((d) => countOf(P.iso(d), e.id)).join(', '));
+      const pct = Math.min(100, (v / target) * 100);
+      el.val.textContent = v;
+      el.of.textContent = ` / ${target}`;
+      el.fill.style.width = pct + '%';
+      el.fill.parentNode.setAttribute('aria-valuenow', Math.round(pct));
+      el.row.classList.toggle('is-done', v >= target);
+      if (changed === e.id) { el.val.classList.remove('bump'); void el.val.offsetWidth; el.val.classList.add('bump'); }
+      // last 7 days as tiny dots: full = target reached, half = some done
+      el.dots.replaceChildren(...days.map((d) => {
+        const n = countOf(P.iso(d), e.id);
+        return h('i', { class: n >= target ? 'full' : n > 0 ? 'some' : '', title: `${d.toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'numeric' })}: ${n} von ${target}` });
+      }));
+      el.dots.setAttribute('aria-label', `Letzte 7 Tage: ` + days.map((d) => countOf(P.iso(d), e.id)).join(', '));
     }
     const streak = strengthStreak();
-    const monday = mondayOf(new Date());
-    const weekSum = (ex) => Object.entries(strength.days).filter(([d]) => d >= P.iso(monday)).reduce((a, [, c]) => a + (+c[ex] || 0), 0);
-    const doneToday = EXERCISES.filter((e) => countOf(iso, e.id) >= strength.targets[e.id]).length;
-    $('#strengthFoot').replaceChildren(
-      ...(streak >= 1 ? [h('span', { class: 'pill good', text: `🔥 ${streak} ${streak === 1 ? 'Tag' : 'Tage'} in Folge alles geschafft` })] : []),
-      h('span', { class: 'pill', text: `Heute ${doneToday}/3 erledigt` }),
-      h('span', { class: 'pill', text: `Diese Woche: ${EXERCISES.map((e) => `${weekSum(e.id)} ${e.short}`).join(' · ')}` }));
+    const monday = P.iso(mondayOf(new Date()));
+    const weekSum = (ex) => Object.entries(strength.days).filter(([d]) => d >= monday).reduce((a, [, c]) => a + (+c[ex] || 0), 0);
+    const parts = [];
+    if (streak >= 1) parts.push(`🔥 ${streak} ${streak === 1 ? 'Tag' : 'Tage'} alles geschafft`);
+    parts.push(`Woche: ${EXERCISES.map((e) => `${weekSum(e.id)} ${e.short}`).join(' · ')}`);
+    $('#strengthFoot').textContent = parts.join('  ·  ');
   }
 
   function editCount(e) {

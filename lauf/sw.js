@@ -5,7 +5,7 @@
    - OCR engine, language data and fonts from CDNs: cached after first use
    ============================================================ */
 
-const VERSION = 'v1';
+const VERSION = 'v2';
 const SHELL = `laufbuch-shell-${VERSION}`;
 const RUNTIME = 'laufbuch-runtime-v1';
 const ASSETS = [

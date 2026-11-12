@@ -14,6 +14,24 @@ ausliest**, die Einheiten speichert und deine Fortschritte anzeigt.
   Kalorien, Höhenmeter, Schrittfrequenz und die Art des Laufs. Fehlende Werte
   werden berechnet (z. B. Pace aus Distanz und Zeit). Meilen und ft werden
   umgerechnet. Unstimmige Werte werden markiert.
+- **Mehrere Fotos pro Einheit**: Jedes „+“ (Erfassen) startet genau eine
+  Einheit. Alle Screenshots, die du dabei auswählst, gehören zu diesem einen
+  Lauf. Mit „+ Foto“ fügst du weitere hinzu, auch später beim Bearbeiten. Die
+  Werte aller Fotos werden zusammengeführt (z. B. Strain und Herzfrequenz aus
+  der Übersicht, Zonen aus dem Zonen-Screenshot, Distanz und Pace aus der
+  Karte). Von Hand korrigierte Felder überschreibt die Erkennung nie. Fotos
+  lassen sich einzeln entfernen oder groß ansehen.
+- **WHOOP-Aktivitäten**: Strain (0–21), Dauer (auch aus der Zeitspanne
+  „6:02 AM – 6:49 AM“), Ø/max. Herzfrequenz, Kalorien, Distanz, Pace und die
+  Zeit in den Herzfrequenzzonen 0–5. Zonen-Legenden wie „Zone 3 (141–158 bpm)“
+  oder „70–80 %“ werden nicht mit Messwerten verwechselt, verstümmelte
+  Zonennummern werden aus der Reihenfolge ergänzt.
+- **Gründliches Lesen**: Jedes Foto wird zweimal gelesen (Seitenlayout und
+  „verstreuter Text“ für Ringe und Kacheln). Zusätzlich setzt die App Kacheln
+  anhand der Wortpositionen wieder zusammen („AVG HR“ über „152“ → Ø HF 152)
+  und entscheidet pro Block, ob die Beschriftung über oder unter dem Wert
+  steht. Farbige Zahlen auf dunklem Hintergrund (typisch für WHOOP) werden vor
+  dem Lesen kontrastreich aufbereitet.
 - **Prüfen vor dem Speichern**: Jedes Feld zeigt, ob es *erkannt* oder
   *berechnet* wurde, und lässt sich korrigieren. Mögliche Duplikate werden
   angezeigt. Mehrere Fotos auf einmal → „Alle speichern“.
@@ -38,8 +56,8 @@ ausliest**, die Einheiten speichert und deine Fortschritte anzeigt.
 - Hell-/Dunkelmodus, für Handys optimiert (schwebende Tab-Leiste, großer
   Kamera-Button).
 
-Getestet mit typischen Layouts von Strava, Garmin Connect, Apple Fitness, Nike
-Run Club u. a. (Beschriftung über oder unter dem Wert, mehrspaltig, helle und
+Getestet mit typischen Layouts von WHOOP, Strava, Garmin Connect, Apple Fitness,
+Nike Run Club u. a. (Beschriftung über oder unter dem Wert, mehrspaltig, helle und
 dunkle Screenshots).
 
 ![Erfassen](docs/erfassen.png)

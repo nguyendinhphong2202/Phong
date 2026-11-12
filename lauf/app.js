@@ -561,22 +561,26 @@
   //  Run list
   // ============================================================
   const TYPE_EMOJI = { Lauf: '🏃', Intervall: '⚡', Trail: '🌲', Laufband: '🏠', Wettkampf: '🏅', Gehen: '🚶' };
+  const runPhotos = (r) => (r.photos && r.photos.length ? r.photos : r.photo ? [r.photo] : []);
   function runItem(r) {
     const p = pace(r);
-    const thumb = r.photo
-      ? h('img', { class: 'run-thumb', src: r.photo, alt: '', loading: 'lazy' })
+    const pics = runPhotos(r);
+    const thumb = pics.length
+      ? h('span', { class: 'run-thumb-wrap' }, h('img', { class: 'run-thumb', src: pics[0], alt: '', loading: 'lazy' }),
+        pics.length > 1 ? h('span', { class: 'run-thumb-count', text: pics.length, title: `${pics.length} Fotos` }) : null)
       : h('div', { class: 'run-thumb', 'data-type': r.type || 'Lauf', 'aria-hidden': 'true', text: parseISO(r.date).toLocaleDateString('de-DE', { weekday: 'short' }).replace('.', '') });
     const meta = [
       r.durationSec ? P.formatDuration(r.durationSec) : null,
       p ? `${P.formatPace(p)} /km` : null,
       r.avgHr ? `♥ ${r.avgHr}` : null,
+      r.strain != null ? `Strain ${nfStrain.format(r.strain)}` : null,
       r.elevationM ? `↗ ${r.elevationM} m` : null,
     ].filter(Boolean);
     return h('li', {},
       h('button', { class: 'run-item', type: 'button', onclick: () => openEdit(r.id) },
         thumb,
         h('div', { class: 'run-main' },
-          h('div', { class: 'run-title', text: `${TYPE_EMOJI[r.type] || '🏃'} ${r.type || 'Lauf'} · ${fmtDate(r.date)}${r.note ? ' · ' + r.note : ''}` }),
+          h('div', { class: 'run-title', text: `${TYPE_EMOJI[r.type] || '🏃'} ${r.type || 'Lauf'} · ${fmtDate(r.date)}${r.startTime ? ', ' + r.startTime : ''}${r.note ? ' · ' + r.note : ''}` }),
           h('div', { class: 'run-meta' }, ...meta.map((t) => h('span', { text: t })))),
         h('div', { class: 'run-km' }, km2(r.distanceKm), h('small', { text: 'km' }))));
   }
@@ -650,51 +654,98 @@
   // ============================================================
   //  Run form
   // ============================================================
-  const FIELD_KEYS = ['date', 'type', 'distanceKm', 'durationSec', 'avgHr', 'maxHr', 'calories', 'elevationM', 'cadence', 'note'];
+  const FIELD_KEYS = ['date', 'type', 'distanceKm', 'durationSec', 'avgHr', 'maxHr', 'calories', 'elevationM', 'cadence', 'strain', 'note'];
   const INT_FIELDS = { avgHr: [30, 250], maxHr: [30, 250], calories: [0, 20000], elevationM: [0, 9000], cadence: [40, 260] };
+  const AUTO_FIELDS = ['date', 'distanceKm', 'durationSec', 'avgHr', 'maxHr', 'calories', 'elevationM', 'cadence', 'strain'];
+  const nfStrain = new Intl.NumberFormat('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
+  /**
+   * The run form. `fill()` lets photo recognition (re)write values – but never a field the
+   * person has typed into, and never a value that was already there when editing a saved run.
+   */
   function createRunForm(values = {}, sources = {}) {
     const form = $('#runFormTpl').content.firstElementChild.cloneNode(true);
     const f = form.elements;
-    f.date.value = values.date || todayISO();
+    const src = {};          // where each value came from: 'ocr' | 'calc' | 'auto' (date default) | undefined (user/saved)
+    const touched = new Set();
     f.date.max = todayISO();
-    f.type.value = values.type || 'Lauf';
-    if (values.distanceKm != null) f.distanceKm.value = String(values.distanceKm).replace('.', ',');
-    if (values.durationSec != null) f.durationSec.value = P.formatDuration(values.durationSec);
-    for (const k of Object.keys(INT_FIELDS)) if (values[k] != null) f[k].value = values[k];
-    if (values.note) f.note.value = values.note;
 
-    const badge = (name, src) => {
+    const badge = (name, s) => {
       const field = (f[name] || form.querySelector(`[name="${name}"]`)).closest('.field');
       const i = field.querySelector('.src');
       if (!i) return;
-      i.className = 'src' + (src ? ' ' + src : '');
-      i.textContent = src === 'ocr' ? 'erkannt ✨' : src === 'calc' ? 'berechnet' : '';
-      field.classList.toggle('is-ocr', src === 'ocr');
+      i.className = 'src' + (s === 'ocr' || s === 'calc' ? ' ' + s : '');
+      i.textContent = s === 'ocr' ? 'erkannt' : s === 'calc' ? 'berechnet' : '';
+      i.title = s === 'ocr' ? 'Automatisch aus dem Foto gelesen' : s === 'calc' ? 'Aus anderen Werten berechnet' : '';
+      field.classList.toggle('is-ocr', s === 'ocr');
     };
-    for (const k of FIELD_KEYS) if (sources[k]) badge(k, sources[k]);
+    const display = (k, v) => {
+      if (v == null || v === '') return '';
+      if (k === 'distanceKm') return String(v).replace('.', ',');
+      if (k === 'durationSec') return P.formatDuration(v);
+      if (k === 'strain') return nfStrain.format(v);
+      return String(v);
+    };
+    const setField = (k, v, s) => {
+      f[k].value = display(k, v);
+      src[k] = s;
+      badge(k, s);
+      f[k].closest('.field').classList.remove('is-invalid');
+      if (s === 'ocr' || s === 'calc') {
+        const field = f[k].closest('.field');
+        field.classList.remove('just-filled'); void field.offsetWidth; field.classList.add('just-filled');
+      }
+    };
 
-    const ocrPace = values.paceSecPerKm;
+    // initial values
+    f.date.value = values.date || todayISO();
+    src.date = values.date ? sources.date : 'auto';
+    badge('date', src.date);
+    f.type.value = values.type || 'Lauf';
+    for (const k of AUTO_FIELDS) if (k !== 'date' && values[k] != null) { f[k].value = display(k, values[k]); src[k] = sources[k]; badge(k, sources[k]); }
+    if (values.note) f.note.value = values.note;
+    let ocrPace = sources.paceSecPerKm === 'ocr' ? values.paceSecPerKm : null;
+
     const updatePace = () => {
       const d = parseFloat(f.distanceKm.value.replace(',', '.'));
       const t = P.parseDuration(f.durationSec.value);
-      const out = f.pace;
       if (d > 0 && t > 0) {
-        out.value = `${P.formatPace(t / d)} /km`;
-        const matchesOcr = ocrPace && Math.abs(t / d - ocrPace) / ocrPace < 0.03 && sources.paceSecPerKm === 'ocr';
-        badge('pace', matchesOcr ? 'ocr' : 'calc');
+        f.pace.value = `${P.formatPace(t / d)} /km`;
+        badge('pace', ocrPace && Math.abs(t / d - ocrPace) / ocrPace < 0.03 ? 'ocr' : 'calc');
       } else {
-        out.value = '–';
+        f.pace.value = '–';
         badge('pace', '');
       }
     };
     updatePace();
+
     form.addEventListener('input', (e) => {
       const name = e.target.name;
-      if (name && name !== 'type' && name !== 'note') badge(name, '');
+      if (!name) return;
+      touched.add(name);
+      if (AUTO_FIELDS.includes(name)) { src[name] = undefined; badge(name, ''); }
       e.target.closest('.field')?.classList.remove('is-invalid');
       if (name === 'distanceKm' || name === 'durationSec') updatePace();
     });
+
+    /** Apply recognised values; returns how many fields changed. */
+    function fill(vals, srcs = {}) {
+      let n = 0;
+      for (const k of AUTO_FIELDS) {
+        if (vals[k] == null || touched.has(k)) continue;
+        const cur = f[k].value.trim();
+        const replaceable = !cur || src[k] === 'ocr' || src[k] === 'calc' || src[k] === 'auto';
+        if (!replaceable) continue;
+        const s = srcs[k] || 'ocr';
+        if (cur === display(k, vals[k]) && src[k] === s) continue;
+        setField(k, vals[k], s);
+        n++;
+      }
+      if (vals.type && vals.type !== 'Lauf' && !touched.has('type') && f.type.value === 'Lauf') f.type.value = vals.type;
+      if (srcs.paceSecPerKm === 'ocr') ocrPace = vals.paceSecPerKm;
+      updatePace();
+      return n;
+    }
 
     function read() {
       const err = [];
@@ -711,13 +762,42 @@
         const v = parseInt(raw, 10);
         if (!(v >= lo && v <= hi)) { err.push(`Wert für „${f[k].closest('.field').querySelector('.field-label').firstChild.textContent.trim()}“ prüfen`); mark(k); } else out[k] = v;
       }
+      const sr = f.strain.value.trim();
+      if (sr) {
+        const v = parseFloat(sr.replace(',', '.'));
+        if (!(v >= 0 && v <= 21)) { err.push('Strain liegt zwischen 0 und 21'); mark('strain'); } else out.strain = Math.round(v * 10) / 10;
+      }
       const box = form.querySelector('.form-error');
       box.hidden = !err.length;
       box.textContent = err.join(' · ');
       return err.length ? null : out;
     }
     form.addEventListener('submit', (e) => e.preventDefault());
-    return { form, read, actions: form.querySelector('.form-actions') };
+    return { form, read, fill, actions: form.querySelector('.form-actions'), zonesBox: form.querySelector('.zones-box') };
+  }
+
+  // Heart-rate zones: ordinal, so one hue from light (easy) to dark (hard); every segment is also labelled.
+  const ZONE_COLORS = ['#f3e3e8', '#fcc6d4', '#f79ab3', '#ea7094', '#d23c69', '#9e2449'];
+  function renderZones(box, zones) {
+    const list = (zones || []).filter((z) => (z.pct || 0) > 0 || (z.sec || 0) > 0);
+    box.hidden = !list.length;
+    if (!list.length) { box.replaceChildren(); return; }
+    const total = list.reduce((a, z) => a + (z.pct != null ? z.pct : 0), 0) || 100;
+    const bar = h('div', { class: 'zone-bar', role: 'img', 'aria-label': 'Zeit in Herzfrequenzzonen' });
+    const legend = h('ul', { class: 'zone-legend' });
+    for (const z of list.slice().sort((a, b) => b.zone - a.zone)) {
+      const pct = z.pct != null ? z.pct : 0;
+      const label = `Zone ${z.zone}`;
+      const val = [z.sec != null ? P.formatDuration(z.sec) : null, z.pct != null ? `${nf0.format(z.pct)} %` : null].filter(Boolean).join(' · ');
+      legend.append(h('li', {}, h('i', { style: `background:${ZONE_COLORS[z.zone]}` }), h('span', { class: 'zl', text: label }), h('span', { class: 'zv', text: val })));
+    }
+    for (const z of list.slice().sort((a, b) => a.zone - b.zone)) {
+      if (!(z.pct > 0)) continue;
+      const seg = h('span', { style: `width:${(z.pct / total) * 100}%;background:${ZONE_COLORS[z.zone]}`, title: `Zone ${z.zone}: ${nf0.format(z.pct)} %` });
+      if (z.pct >= 9) seg.textContent = z.zone;
+      bar.append(seg);
+    }
+    box.replaceChildren(h('div', { class: 'field-label', text: 'Herzfrequenzzonen' }), bar, legend);
   }
 
   // ============================================================
@@ -730,12 +810,12 @@
     const r = runs.find((x) => x.id === id);
     if (!r) return;
     $('#editTitle').textContent = 'Einheit bearbeiten';
-    const { form, read, actions } = createRunForm(r);
-    actions.append(
+    const ed = createEditor({ run: r });
+    ed.actions.append(
       h('button', { class: 'btn btn-primary', type: 'submit', text: 'Speichern', onclick: async () => {
-        const v = read(); if (!v) return;
-        const updated = { ...r, ...v, note: v.note, updatedAt: Date.now() };
-        for (const k of Object.keys(INT_FIELDS)) if (v[k] == null) delete updated[k];
+        if (ed.busy()) return toast('Einen Moment – Flitzi liest noch 📖');
+        const updated = ed.build(r);
+        if (!updated) return;
         const reached = await saveRun(updated);
         dlg.close();
         if (reached.length) celebrate('Juhu, geschafft!', G.describe(reached[0]), ' – Ziel erreicht!');
@@ -748,10 +828,12 @@
         await deleteRun(r.id);
         toast('Einheit gelöscht', { label: 'Rückgängig', fn: () => saveRun(r) });
       } }));
-    const body = $('#editBody');
-    body.replaceChildren(...[r.photo ? h('img', { class: 'dialog-photo', src: r.photo, alt: 'Foto der Einheit' }) : null, form].filter(Boolean));
+    $('#editBody').replaceChildren(ed.el);
+    openEditor = ed;
     dlg.showModal();
   }
+  let openEditor = null;
+  dlg.addEventListener('close', () => { openEditor = null; });
 
   // ============================================================
   //  Goals
@@ -1063,46 +1145,31 @@
     return workerPromise;
   }
 
-  /** Run OCR sequentially (one worker); a second, differently segmented pass fills gaps. */
+  /**
+   * OCR one prepared image (one worker, jobs run one after another).
+   * Returns several readings of the same picture – the parser keeps, per value, the reading it
+   * trusts most:
+   *  1. automatic page layout (PSM 3)
+   *  2. sparse text (PSM 11) – finds lone numbers inside rings and tiles
+   *  3. tiles rebuilt from word positions ("AVG HR" above "152" → "AVG HR 152")
+   */
   function recognize(canvas, onProgress) {
     const job = ocrChain.then(async () => {
       currentLogger = (m) => onProgress(m);
       try {
         const w = await getWorker();
+        const out = { text: true, blocks: true, hocr: false, tsv: false };
         await w.setParameters({ tessedit_pageseg_mode: '3' });
-        const a = await w.recognize(canvas);
-        let text = a.data.text;
-        const first = P.parseRunText(text);
-        if (first.distanceKm == null || first.durationSec == null || first.recognized < 3) {
-          onProgress({ status: 'second pass', progress: 0 });
-          await w.setParameters({ tessedit_pageseg_mode: '11' });
-          const b = await w.recognize(canvas);
-          text += '\n\n' + b.data.text;
-          return { text, first: a.data.text, second: b.data.text };
-        }
-        return { text, first: a.data.text };
+        const a = await w.recognize(canvas, {}, out);
+        onProgress({ status: 'second pass', progress: 0 });
+        await w.setParameters({ tessedit_pageseg_mode: '11' });
+        const b = await w.recognize(canvas, {}, out);
+        const tiles = [P.cellsToLines(a.data.words), P.cellsToLines(b.data.words)].filter(Boolean).join('\n');
+        return [a.data.text, b.data.text, tiles].filter((t) => t && t.trim());
       } finally { currentLogger = null; }
     });
     ocrChain = job.catch(() => {});
     return job;
-  }
-
-  function mergeParsed(primary, secondary) {
-    if (!secondary) return primary;
-    const out = { ...primary, source: { ...primary.source }, warnings: primary.warnings.slice() };
-    for (const k of ['distanceKm', 'durationSec', 'paceSecPerKm', 'avgHr', 'maxHr', 'calories', 'elevationM', 'cadence', 'date']) {
-      if ((out[k] == null || out.source[k] === 'calc') && secondary[k] != null && secondary.source[k] === 'ocr') {
-        out[k] = secondary[k]; out.source[k] = 'ocr';
-      }
-    }
-    // Re-derive pace/distance/duration consistency with merged values
-    const { distanceKm: d, durationSec: t, paceSecPerKm: p } = out;
-    if (d && t && out.source.paceSecPerKm !== 'ocr') { out.paceSecPerKm = Math.round(t / d); out.source.paceSecPerKm = 'calc'; }
-    if (!d && t && p) { out.distanceKm = Math.round((t / p) * 100) / 100; out.source.distanceKm = 'calc'; }
-    if (d && !t && p) { out.durationSec = Math.round(d * p); out.source.durationSec = 'calc'; }
-    out.recognized = Object.values(out.source).filter((v) => v === 'ocr').length;
-    out.isRun = primary.isRun || secondary.isRun;
-    return out;
   }
 
   async function loadImage(file) {
@@ -1129,20 +1196,28 @@
     return c;
   }
 
-  /** Grayscale, invert dark-mode screenshots, stretch contrast. */
+  /**
+   * Make text black on white for the OCR.
+   * Apps like WHOOP show coloured numbers (blue strain, green/red zones) on near-black: plain
+   * grey-scaling turns a bright blue into dark grey. So on dark backgrounds we take the
+   * brightest channel (any coloured text becomes bright) and invert; on light backgrounds the
+   * darkest channel (coloured text becomes dark). Then stretch the contrast.
+   */
   function prepareForOcr(img) {
     const c = drawScaled(img, 2600, 1100);
     const ctx = c.getContext('2d', { willReadFrequently: true });
     const id = ctx.getImageData(0, 0, c.width, c.height);
     const px = id.data;
-    const hist = new Uint32Array(256);
-    let sum = 0;
-    for (let i = 0; i < px.length; i += 4) {
-      const l = Math.round(0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2]);
-      px[i] = l; hist[l]++; sum += l;
-    }
     const total = px.length / 4;
-    const invert = sum / total < 110;
+    let lum = 0;
+    for (let i = 0; i < px.length; i += 16) lum += 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
+    const dark = lum / (total / 4) < 110;
+    const hist = new Uint32Array(256);
+    for (let i = 0; i < px.length; i += 4) {
+      const r = px[i], g = px[i + 1], b = px[i + 2];
+      const v = dark ? Math.max(r, g, b) : Math.min(r, g, b);
+      px[i] = v; hist[v]++;
+    }
     let acc = 0, lo = 0, hi = 255;
     for (let v = 0; v < 256; v++) { acc += hist[v]; if (acc > total * 0.02) { lo = v; break; } }
     acc = 0;
@@ -1151,7 +1226,7 @@
     for (let i = 0; i < px.length; i += 4) {
       let v = ((px[i] - lo) * 255) / range;
       v = v < 0 ? 0 : v > 255 ? 255 : v;
-      if (invert) v = 255 - v;
+      if (dark) v = 255 - v;
       px[i] = px[i + 1] = px[i + 2] = v;
     }
     ctx.putImageData(id, 0, 0);
@@ -1206,36 +1281,250 @@
     'initializing tesseract': 'Flitzi setzt die Lesebrille auf …',
     'loading language traineddata': 'Flitzi lernt noch schnell lesen (nur beim ersten Mal) …',
     'initializing api': 'Flitzi macht sich bereit …',
-    'recognizing text': 'Flitzi liest deine Werte …',
-    'second pass': 'Flitzi schaut noch mal ganz genau hin …',
+    'recognizing text': 'Flitzi liest',
+    'second pass': 'Flitzi schaut noch mal ganz genau hin',
   };
+  const MAX_PHOTOS = 8;
+  const isImageFile = (f) => f && (f.type.startsWith('image/') || /\.(heic|heif|jpe?g|png|webp)$/i.test(f.name || ''));
 
+  // ============================================================
+  //  Run editor: one unit (Einheit) = one form + any number of photos
+  //  Used for new units (queue) and for editing a saved run.
+  // ============================================================
+  function createEditor({ run = null } = {}) {
+    const photos = [];          // { id, url, texts: string[]|null, state: 'loading'|'done'|'error', exif, lastModified }
+    let zones = run && run.zones ? run.zones : null;
+    let startTime = run ? run.startTime || null : null;
+    let app = run ? run.app || null : null;
+    let lastParsed = null;
+    const ed = {};
 
+    const { form, read, fill, actions, zonesBox } = createRunForm(run || {}, {});
+    renderZones(zonesBox, zones);
+
+    const picker = h('input', { type: 'file', accept: 'image/*', multiple: true, hidden: true });
+    const strip = h('div', { class: 'photo-strip' });
+    const statusText = h('span', { text: '' });
+    const status = h('div', { class: 'q-status', hidden: true }, mascot('run', 44), statusText);
+    const bar = h('div', { class: 'q-progress', hidden: true }, h('span'));
+    const notices = h('div', { class: 'notices' });
+    const dupBox = h('div', { class: 'notice warn', hidden: true });
+    const raw = h('details', { class: 'raw', hidden: true }, h('summary', { text: 'Erkannten Text anzeigen' }), h('pre'));
+    const el = h('div', { class: 'editor' }, strip, picker, status, bar, notices, dupBox, form, raw);
+
+    // existing photos of a saved run
+    const savedPhotos = run ? (run.photos && run.photos.length ? run.photos : run.photo ? [run.photo] : []) : [];
+    savedPhotos.forEach((url, i) => photos.push({ id: uid(), url, texts: (run.ocrTexts && run.ocrTexts[i]) || [], state: 'done' }));
+
+    function renderStrip() {
+      const tiles = photos.map((p, i) => {
+        const tile = h('div', { class: `ph is-${p.state}` },
+          p.url ? h('img', { src: p.url, alt: `Foto ${i + 1}` }) : h('div', { class: 'ph-empty' }),
+          p.state === 'loading' ? h('span', { class: 'ph-badge' }, h('span', { class: 'ph-spin' })) : null,
+          p.state === 'error' ? h('span', { class: 'ph-badge err', text: '!' , title: 'Konnte nicht gelesen werden' }) : null,
+          h('button', { class: 'ph-x', type: 'button', 'aria-label': `Foto ${i + 1} entfernen`, onclick: () => removePhoto(p.id) }, '×'));
+        tile.addEventListener('click', (e) => { if (!e.target.closest('.ph-x') && p.url) previewPhoto(p.url); });
+        return tile;
+      });
+      const canAdd = photos.length < MAX_PHOTOS;
+      const add = canAdd ? h('button', { class: 'ph ph-add', type: 'button', onclick: () => picker.click() },
+        h('span', { class: 'ph-plus', text: '+' }), h('span', { text: photos.length ? 'Foto' : 'Foto hinzufügen' })) : null;
+      strip.replaceChildren(...tiles, ...(add ? [add] : []));
+      strip.classList.toggle('is-empty', !photos.length);
+    }
+
+    function setBusy() {
+      const loading = photos.filter((p) => p.state === 'loading');
+      status.hidden = bar.hidden = !loading.length;
+      el.classList.toggle('is-busy', loading.length > 0);
+      if (ed.onState) ed.onState();
+    }
+
+    function progressFor(p) {
+      const idx = photos.indexOf(p) + 1;
+      const label = photos.length > 1 ? ` Foto ${idx} von ${photos.length}` : ' dein Foto';
+      return (m) => {
+        const txt = STATUS_TEXT[m.status];
+        if (!txt) return;
+        const reading = m.status === 'recognizing text' || m.status === 'second pass';
+        statusText.textContent = reading ? `${txt}${label} … ${Math.round((m.progress || 0) * 100)} %` : txt;
+        const pr = m.status === 'recognizing text' ? m.progress * 0.5 : m.status === 'second pass' ? 0.5 + (m.progress || 0) * 0.5 : (m.progress || 0) * 0.1;
+        bar.firstChild.style.width = Math.round(pr * 100) + '%';
+      };
+    }
+
+    async function addFile(file) {
+      if (photos.length >= MAX_PHOTOS) { toast(`Maximal ${MAX_PHOTOS} Fotos pro Einheit`); return; }
+      const p = { id: uid(), url: null, texts: null, state: 'loading', lastModified: file.lastModified };
+      photos.push(p);
+      renderStrip(); setBusy();
+      try {
+        const [img, exif] = await Promise.all([loadImage(file), exifDate(file)]);
+        p.exif = exif;
+        p.url = drawScaled(img, 900).toDataURL('image/jpeg', 0.8);
+        renderStrip();
+        const canvas = prepareForOcr(img);
+        statusText.textContent = 'Gleich bist du dran …';
+        if (!photos.includes(p)) return; // removed meanwhile
+        p.texts = await recognize(canvas, (m) => { if (photos.includes(p)) progressFor(p)(m); });
+        p.state = 'done';
+      } catch (e) {
+        console.error(e);
+        p.state = 'error';
+        p.texts = [];
+        const offline = e && e.message && /online|geladen/.test(e.message);
+        notices.prepend(h('div', { class: 'notice warn', text: offline ? e.message + ' Du kannst die Werte trotzdem von Hand eintragen.' : 'Ups, ein Bild konnte ich nicht lesen 🙈 Trag fehlende Werte bitte kurz selbst ein.' }));
+      }
+      if (!photos.includes(p)) return;
+      renderStrip(); setBusy();
+      reparse();
+    }
+
+    ed.addFiles = (files) => {
+      const imgs = [...files].filter(isImageFile);
+      if (!imgs.length) { toast('Bitte ein Bild (Screenshot oder Foto) wählen'); return; }
+      const free = MAX_PHOTOS - photos.length;
+      if (imgs.length > free) toast(`Maximal ${MAX_PHOTOS} Fotos pro Einheit`);
+      imgs.slice(0, free).forEach(addFile);
+    };
+    picker.addEventListener('change', () => { ed.addFiles(picker.files); picker.value = ''; });
+
+    function removePhoto(id) {
+      const i = photos.findIndex((p) => p.id === id);
+      if (i < 0) return;
+      photos.splice(i, 1);
+      renderStrip(); setBusy();
+      reparse(true);
+    }
+
+    /** Combine the readings of all photos into one set of values. */
+    function reparse(afterRemove = false) {
+      const texts = photos.flatMap((p) => p.texts || []);
+      raw.hidden = !texts.length;
+      raw.lastChild.textContent = photos.map((p, i) => (p.texts && p.texts.length ? `— Foto ${i + 1} —\n${p.texts[0].trim()}` : '')).filter(Boolean).join('\n\n');
+      if (!texts.length) { if (!afterRemove) notices.replaceChildren(); checkDup(); return; }
+      const parsed = P.parseRunText(texts, { referenceDate: new Date() });
+      lastParsed = parsed;
+      const sources = { ...parsed.source };
+      if (!parsed.date) {
+        const ex = photos.find((p) => p.exif);
+        if (ex) { parsed.date = ex.exif; sources.date = 'ocr'; }
+        else if (!run) {
+          const lm = photos.find((p) => p.lastModified && Date.now() - p.lastModified < 400 * 864e5);
+          if (lm) { parsed.date = P.iso(new Date(lm.lastModified)); sources.date = 'auto'; }
+        }
+      }
+      fill(parsed, sources);
+      if (parsed.zones) zones = parsed.zones;
+      if (parsed.startTime) startTime = parsed.startTime;
+      if (parsed.app) app = parsed.app;
+      renderZones(zonesBox, zones);
+
+      const done = photos.filter((p) => p.state !== 'loading').length;
+      const msgs = [];
+      if (!photos.some((p) => p.state === 'loading')) {
+        if (!parsed.isRun) msgs.push(['warn', 'Hm, hier habe ich keine Laufdaten gefunden 🙈 Trag die Werte einfach unten ein.']);
+        else {
+          const what = [parsed.app === 'WHOOP' ? 'WHOOP-Aktivität' : null, parsed.zones ? 'Herzfrequenzzonen' : null].filter(Boolean).join(' mit ');
+          msgs.push(['good', `✨ ${parsed.recognized} ${parsed.recognized === 1 ? 'Wert' : 'Werte'} aus ${done} ${done === 1 ? 'Foto' : 'Fotos'} erkannt${what ? ` (${what})` : ''} – schau kurz drüber, ob alles stimmt.`]);
+          const missing = [];
+          if (parsed.distanceKm == null) missing.push('Distanz');
+          if (parsed.durationSec == null) missing.push('Dauer');
+          if (missing.length) msgs.push(['warn', `${missing.join(' und ')} ${missing.length > 1 ? 'fehlen' : 'fehlt'} noch – trag ${missing.length > 1 ? 'sie' : 'sie'} ein oder füg mit „+ Foto“ einen weiteren Screenshot hinzu (z. B. die Karte mit Distanz & Pace).`]);
+        }
+        parsed.warnings.forEach((w) => msgs.push(['warn', w]));
+      }
+      notices.replaceChildren(...msgs.map(([cls, text]) => h('div', { class: `notice ${cls}`, text })));
+      checkDup();
+    }
+
+    function checkDup() {
+      const date = form.elements.date.value;
+      const d = parseFloat(form.elements.distanceKm.value.replace(',', '.'));
+      const dup = runs.find((r) => (!run || r.id !== run.id) && r.date === date && Math.abs((r.distanceKm || 0) - d) < 0.06);
+      dupBox.hidden = !dup;
+      dupBox.textContent = dup ? `Am ${fmtDate(dup.date)} ist bereits ein Lauf über ${km2(dup.distanceKm)} km gespeichert – evtl. doppelt?` : '';
+    }
+    form.addEventListener('input', checkDup);
+
+    // drop more pictures straight onto this unit
+    el.addEventListener('dragover', (e) => { if (e.dataTransfer && [...e.dataTransfer.types].includes('Files')) { e.preventDefault(); el.classList.add('drag'); } });
+    el.addEventListener('dragleave', (e) => { if (!el.contains(e.relatedTarget)) el.classList.remove('drag'); });
+    el.addEventListener('drop', (e) => { e.preventDefault(); e.stopPropagation(); el.classList.remove('drag'); ed.addFiles(e.dataTransfer.files); });
+
+    /** The run to save (merged with `base` when editing), or null if the form is incomplete. */
+    ed.build = (base = null) => {
+      const v = read();
+      if (!v) return null;
+      const keep = photos.filter((p) => p.url && p.state !== 'loading');
+      const out = { ...(base || { id: uid(), createdAt: Date.now() }), ...v, updatedAt: base ? Date.now() : undefined };
+      for (const k of [...Object.keys(INT_FIELDS), 'strain', 'note']) if (v[k] == null) delete out[k];
+      delete out.photo;
+      if (keep.length) { out.photos = keep.map((p) => p.url); out.ocrTexts = keep.map((p) => p.texts || []); }
+      else { delete out.photos; delete out.ocrTexts; }
+      if (zones && zones.length) out.zones = zones; else delete out.zones;
+      if (startTime) out.startTime = startTime;
+      if (app) out.app = app;
+      if (!base) delete out.updatedAt;
+      delete out.rawText;
+      return out;
+    };
+    ed.busy = () => photos.some((p) => p.state === 'loading');
+    ed.photoCount = () => photos.length;
+    ed.el = el;
+    ed.form = form;
+    ed.actions = actions;
+    ed.focusFirst = () => form.querySelector('input[name=distanceKm]')?.focus();
+    renderStrip();
+    checkDup();
+    return ed;
+  }
+
+  function previewPhoto(url) {
+    const ov = h('button', { class: 'photo-preview', type: 'button', 'aria-label': 'Vorschau schließen' }, h('img', { src: url, alt: 'Foto' }));
+    ov.addEventListener('click', () => ov.remove());
+    document.addEventListener('keydown', function esc(e) { if (e.key === 'Escape') { ov.remove(); document.removeEventListener('keydown', esc); } });
+    (dlg.open ? dlg : document.body).append(ov);
+  }
+
+  // ---------- Queue of new units ----------
   function updateQueueHead() {
-    const ready = queue.filter((q) => q.status === 'ready').length;
+    const ready = queue.filter((q) => !q.editor.busy()).length;
     $('#queueHead').hidden = queue.length === 0;
     $('#queueCount').textContent = queue.length ? `(${queue.length})` : '';
-    $('#saveAllBtn').hidden = ready < 2;
+    $('#saveAllBtn').hidden = queue.length < 2;
     $('#saveAllBtn').textContent = `Alle speichern (${ready})`;
   }
 
-  function addQueueItem({ file = null, photo = null } = {}) {
-    const item = { id: uid(), file, status: 'loading', photo };
-    const photoBox = h('div', { class: 'q-photo' }, h('div', { class: 'no-photo' }, h('i', { class: 'emo', text: '✏️' }), 'Von Hand eingetragen'));
-    const status = h('div', { class: 'q-status' }, mascot('run', 44), h('span', { text: 'Flitzi schnappt sich dein Bild …' }));
-    const bar = h('div', { class: 'q-progress' }, h('span'));
-    const body = h('div', { class: 'q-body' }, status, bar);
-    item.el = h('article', { class: 'card q-item' }, photoBox, body);
-    Object.assign(item, { photoBox, statusEl: status, bar, body });
+  /** A new unit. Every press on "+" / every selection from the drop zone creates exactly one. */
+  function newUnit(files = null) {
+    const editor = createEditor();
+    const item = { id: uid(), editor };
+    const head = h('div', { class: 'unit-head' },
+      h('span', { class: 'unit-badge', text: 'Neue Einheit' }),
+      h('span', { class: 'unit-hint', text: 'Alle Fotos hier gehören zu diesem einen Lauf.' }));
+    item.el = h('article', { class: 'card q-item' }, head, editor.el);
+    editor.onState = updateQueueHead;
+    item.save = async () => {
+      if (editor.busy()) { toast('Einen Moment – Flitzi liest noch 📖'); return false; }
+      const run = editor.build();
+      if (!run) return false;
+      const reached = await saveRun(run);
+      removeQueueItem(item);
+      return { run, reached };
+    };
+    editor.actions.append(
+      h('button', { class: 'btn btn-primary', type: 'submit', text: 'Einheit speichern', onclick: async () => {
+        const res = await item.save();
+        if (res) runSavedToast(res.run, res.reached);
+      } }),
+      h('button', { class: 'btn', type: 'button', text: 'Verwerfen', onclick: () => removeQueueItem(item) }));
     queue.unshift(item);
     $('#queue').prepend(item.el);
     updateQueueHead();
+    if (files) editor.addFiles(files);
+    else editor.focusFirst();
     return item;
-  }
-
-  function setStatus(item, text, progress) {
-    item.statusEl.lastChild.textContent = text;
-    if (progress != null) item.bar.firstChild.style.width = Math.round(progress * 100) + '%';
   }
 
   function removeQueueItem(item) {
@@ -1245,118 +1534,43 @@
     updateQueueHead();
   }
 
-  function showForm(item, parsed, rawText) {
-    item.statusEl.remove();
-    item.bar.remove();
-    const notices = [];
-    if (parsed) {
-      if (!parsed.isRun) notices.push(h('div', { class: 'notice warn', text: 'Hm, hier habe ich keine Laufdaten gefunden 🙈 Trag die Werte einfach unten ein.' }));
-      else notices.push(h('div', { class: 'notice good', text: `✨ ${parsed.recognized} ${parsed.recognized === 1 ? 'Wert' : 'Werte'} erkannt – schau kurz drüber, ob alles stimmt.` }));
-      parsed.warnings.forEach((w) => notices.push(h('div', { class: 'notice warn', text: w })));
-    }
-    const values = parsed || {};
-    const sources = { ...(parsed ? parsed.source : {}) };
-    if (!values.date && item.exifDate) { values.date = item.exifDate; sources.date = 'ocr'; }
-    if (!values.date && item.file && item.file.lastModified) {
-      const d = new Date(item.file.lastModified);
-      if (Date.now() - d < 400 * 864e5) values.date = P.iso(d);
-    }
-    const { form, read, actions } = createRunForm(values, sources);
-    const dupBox = h('div', { class: 'notice warn', hidden: true });
-    const checkDup = () => {
-      const v = { date: form.elements.date.value, d: parseFloat(form.elements.distanceKm.value.replace(',', '.')) };
-      const dup = runs.find((r) => r.date === v.date && Math.abs((r.distanceKm || 0) - v.d) < 0.06);
-      dupBox.hidden = !dup;
-      dupBox.textContent = dup ? `Am ${fmtDate(dup.date)} ist bereits ein Lauf über ${km2(dup.distanceKm)} km gespeichert – evtl. doppelt?` : '';
-    };
-    form.addEventListener('input', checkDup);
-    checkDup();
-
-    item.save = async () => {
-      const v = read();
-      if (!v) return false;
-      const run = { id: uid(), ...v, photo: item.photo || undefined, rawText: rawText || undefined, createdAt: Date.now() };
-      const reached = await saveRun(run);
-      removeQueueItem(item);
-      return { run, reached };
-    };
-    actions.append(
-      h('button', { class: 'btn btn-primary', type: 'submit', text: 'Speichern', onclick: async () => {
-        const res = await item.save();
-        if (res) runSavedToast(res.run, res.reached);
-      } }),
-      h('button', { class: 'btn', type: 'button', text: 'Verwerfen', onclick: () => removeQueueItem(item) }));
-
-    const extra = rawText ? h('details', { class: 'raw' }, h('summary', { text: 'Erkannten Text anzeigen' }), h('pre', { text: rawText })) : null;
-    item.body.append(...notices, dupBox, form, ...(extra ? [extra] : []));
-    item.status = 'ready';
-    updateQueueHead();
-    const first = form.querySelector('.field.is-invalid input, input:not([type=date])');
-    if (!parsed) first?.focus();
-  }
-
-  async function processFile(file) {
-    const item = addQueueItem({ file });
-    try {
-      const [img, exif] = await Promise.all([loadImage(file), exifDate(file)]);
-      item.exifDate = exif;
-      const thumb = drawScaled(img, 640);
-      item.photo = thumb.toDataURL('image/jpeg', 0.78);
-      item.photoBox.replaceChildren(h('img', { src: item.photo, alt: 'Hochgeladenes Bild' }));
-      const canvas = prepareForOcr(img);
-      setStatus(item, 'Gleich bist du dran …', 0.02);
-      const res = await recognize(canvas, (m) => {
-        const txt = STATUS_TEXT[m.status];
-        if (!txt) return;
-        const pr = m.status === 'recognizing text' ? m.progress : m.status === 'second pass' ? 0 : (m.progress || 0) * 0.15;
-        setStatus(item, txt + (m.status === 'recognizing text' ? ` ${Math.round(m.progress * 100)} %` : ''), pr);
-      });
-      const primary = P.parseRunText(res.first, { referenceDate: new Date() });
-      const secondary = res.second ? P.parseRunText(res.second, { referenceDate: new Date() }) : null;
-      showForm(item, mergeParsed(primary, secondary), res.first.trim() + (res.second ? '\n\n— 2. Durchgang —\n' + res.second.trim() : ''));
-    } catch (e) {
-      console.error(e);
-      item.statusEl.remove();
-      item.bar.remove();
-      item.body.prepend(h('div', { class: 'notice warn', text: (e && e.message && /online|geladen/.test(e.message)) ? e.message + ' Du kannst die Werte trotzdem von Hand eintragen.' : 'Ups, das Bild konnte ich nicht lesen 🙈 Trag die Werte bitte kurz selbst ein.' }));
-      showForm(item, null, '');
-    }
-  }
-
   function handleFiles(files) {
-    const imgs = [...files].filter((f) => f.type.startsWith('image/') || /\.(heic|heif|jpe?g|png|webp)$/i.test(f.name));
+    const imgs = [...files].filter(isImageFile);
     if (!imgs.length) { toast('Bitte ein Bild (Screenshot oder Foto) wählen'); return; }
     showTab('add');
-    imgs.forEach(processFile);
+    newUnit(imgs);
   }
 
   $('#fileInput').addEventListener('change', (e) => { handleFiles(e.target.files); e.target.value = ''; });
   $('#cameraInput').addEventListener('change', (e) => { handleFiles(e.target.files); e.target.value = ''; });
-  $('#manualBtn').addEventListener('click', () => {
-    const item = addQueueItem();
-    showForm(item, null, '');
-  });
+  $('#manualBtn').addEventListener('click', () => newUnit());
   $('#saveAllBtn').addEventListener('click', async () => {
     let ok = 0, fail = 0;
     const reached = [];
-    for (const item of queue.filter((q) => q.status === 'ready').slice()) {
+    for (const item of queue.slice()) {
       const res = await item.save();
       if (res) { ok++; reached.push(...res.reached); } else fail++;
     }
     if (reached.length) celebrate('Juhu, geschafft!', G.describe(reached[0]), ' – Ziel erreicht!');
-    toast(fail ? `${ok} gespeichert, bei ${fail} fehlt noch etwas` : `${ok} Läufe gespeichert 🎉`);
+    toast(fail ? `${ok} gespeichert, bei ${fail} fehlt noch etwas` : `${ok} ${ok === 1 ? 'Einheit' : 'Einheiten'} gespeichert 🎉`);
   });
 
   const dz = $('#dropzone');
   ['dragenter', 'dragover'].forEach((ev) => dz.addEventListener(ev, (e) => { e.preventDefault(); dz.classList.add('drag'); }));
   ['dragleave', 'drop'].forEach((ev) => dz.addEventListener(ev, () => dz.classList.remove('drag')));
-  dz.addEventListener('drop', (e) => { e.preventDefault(); handleFiles(e.dataTransfer.files); });
+  dz.addEventListener('drop', (e) => { e.preventDefault(); e.stopPropagation(); handleFiles(e.dataTransfer.files); });
   document.addEventListener('dragover', (e) => e.preventDefault());
-  document.addEventListener('drop', (e) => { if (!dz.contains(e.target)) { e.preventDefault(); if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files); } });
+  document.addEventListener('drop', (e) => { e.preventDefault(); if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files); });
+  // Pasting adds to the newest open unit (e.g. paste three screenshots one after another); otherwise starts one.
   document.addEventListener('paste', (e) => {
     if (e.target.closest && e.target.closest('input, textarea')) return;
-    const files = [...(e.clipboardData?.items || [])].filter((i) => i.kind === 'file').map((i) => i.getAsFile()).filter(Boolean);
-    if (files.length) { e.preventDefault(); handleFiles(files); }
+    const files = [...(e.clipboardData?.items || [])].filter((i) => i.kind === 'file').map((i) => i.getAsFile()).filter(isImageFile);
+    if (!files.length) return;
+    e.preventDefault();
+    if (dlg.open && openEditor) { openEditor.addFiles(files); return; }
+    showTab('add');
+    if (queue[0]) { queue[0].editor.addFiles(files); toast('Zur neuesten Einheit hinzugefügt 📎'); }
+    else newUnit(files);
   });
 
   // ============================================================
@@ -1376,9 +1590,11 @@
   }
   $('#exportCsvBtn').addEventListener('click', () => {
     const esc = (v) => (v == null ? '' : /[;"\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v));
-    const rows = [['Datum', 'Art', 'Distanz (km)', 'Dauer', 'Pace (min/km)', 'Ø HF', 'Max HF', 'Kalorien', 'Höhenmeter', 'Schrittfrequenz', 'Notiz']];
+    const rows = [['Datum', 'Start', 'Art', 'Distanz (km)', 'Dauer', 'Pace (min/km)', 'Ø HF', 'Max HF', 'Kalorien', 'Höhenmeter', 'Schrittfrequenz', 'Strain', ...[0, 1, 2, 3, 4, 5].map((z) => `Zone ${z} (min)`), 'Fotos', 'Notiz']];
     for (const r of sortedRuns().reverse()) {
-      rows.push([r.date, r.type, km2(r.distanceKm), P.formatDuration(r.durationSec), P.formatPace(pace(r)), r.avgHr, r.maxHr, r.calories, r.elevationM, r.cadence, r.note]);
+      const zt = (z) => { const x = (r.zones || []).find((q) => q.zone === z); return x && x.sec != null ? nf1.format(x.sec / 60) : ''; };
+      rows.push([r.date, r.startTime, r.type, km2(r.distanceKm), P.formatDuration(r.durationSec), P.formatPace(pace(r)), r.avgHr, r.maxHr, r.calories, r.elevationM, r.cadence,
+        r.strain != null ? nfStrain.format(r.strain) : '', ...[0, 1, 2, 3, 4, 5].map(zt), runPhotos(r).length || '', r.note]);
     }
     download(`laufbuch-${todayISO()}.csv`, '﻿' + rows.map((r) => r.map(esc).join(';')).join('\r\n'), 'text/csv;charset=utf-8');
   });
@@ -1399,8 +1615,19 @@
         const clean = { id: typeof r.id === 'string' ? r.id : uid(), date: r.date, type: String(r.type || 'Lauf'), distanceKm: +r.distanceKm, createdAt: +r.createdAt || Date.now() };
         for (const k of ['durationSec', 'avgHr', 'maxHr', 'calories', 'elevationM', 'cadence']) if (Number.isFinite(+r[k]) && r[k] != null) clean[k] = +r[k];
         if (typeof r.note === 'string') clean.note = r.note;
-        if (typeof r.photo === 'string' && r.photo.startsWith('data:image/')) clean.photo = r.photo;
-        if (typeof r.rawText === 'string') clean.rawText = r.rawText;
+        const pics = (Array.isArray(r.photos) ? r.photos : [r.photo]).filter((u) => typeof u === 'string' && u.startsWith('data:image/'));
+        if (pics.length) {
+          clean.photos = pics.slice(0, MAX_PHOTOS);
+          if (Array.isArray(r.ocrTexts)) clean.ocrTexts = r.ocrTexts.slice(0, clean.photos.length).map((t) => (Array.isArray(t) ? t.filter((x) => typeof x === 'string') : []));
+        }
+        if (Number.isFinite(+r.strain) && r.strain != null && +r.strain >= 0 && +r.strain <= 21) clean.strain = +r.strain;
+        if (typeof r.startTime === 'string' && /^\d{2}:\d{2}$/.test(r.startTime)) clean.startTime = r.startTime;
+        if (r.app === 'WHOOP') clean.app = 'WHOOP';
+        if (Array.isArray(r.zones)) {
+          const zs = r.zones.filter((z) => z && Number.isInteger(+z.zone) && +z.zone >= 0 && +z.zone <= 5)
+            .map((z) => ({ zone: +z.zone, ...(Number.isFinite(+z.sec) && z.sec != null ? { sec: +z.sec } : {}), ...(Number.isFinite(+z.pct) && z.pct != null ? { pct: +z.pct } : {}) }));
+          if (zs.length) clean.zones = zs;
+        }
         await DB.put(clean);
         n++;
       }

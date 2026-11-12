@@ -333,6 +333,7 @@
     const st = stats();
     renderHero(st);
     renderGoals(st);
+    renderStrength();
     if (empty) return;
 
     // KPIs
@@ -1097,6 +1098,179 @@
   }
 
   // ============================================================
+  //  Kraft-Challenge: daily push-ups, pull-ups and dips
+  // ============================================================
+  const STRENGTH_KEY = 'laufbuch.strength.v1';
+  const EXERCISES = [
+    { id: 'pushups', name: 'Liegestütze', short: 'Liegestütze', emo: '💪' },
+    { id: 'pullups', name: 'Klimmzüge', short: 'Klimmzüge', emo: '🧗' },
+    { id: 'dips', name: 'Dips', short: 'Dips', emo: '🏋️' },
+  ];
+  let strength = { targets: { pushups: 50, pullups: 50, dips: 50 }, days: {} };
+
+  function loadStrength() {
+    try {
+      const s = JSON.parse(localStorage.getItem(STRENGTH_KEY));
+      if (s && typeof s === 'object') {
+        strength.targets = { ...strength.targets, ...(s.targets || {}) };
+        strength.days = s.days && typeof s.days === 'object' ? s.days : {};
+      }
+    } catch {}
+  }
+  function saveStrength() { try { localStorage.setItem(STRENGTH_KEY, JSON.stringify(strength)); } catch {} }
+  const dayCounts = (iso) => strength.days[iso] || {};
+  const countOf = (iso, ex) => +(dayCounts(iso)[ex] || 0);
+  const allDone = (iso) => EXERCISES.every((e) => countOf(iso, e.id) >= strength.targets[e.id]);
+
+  /** Days in a row (ending today, or yesterday if today isn't finished yet) with all three targets reached. */
+  function strengthStreak() {
+    const d = new Date();
+    if (!allDone(P.iso(d))) d.setDate(d.getDate() - 1);
+    let n = 0;
+    while (allDone(P.iso(d)) && n < 3650) { n++; d.setDate(d.getDate() - 1); }
+    return n;
+  }
+
+  function setCount(ex, value, { celebrateDone = true } = {}) {
+    const iso = todayISO();
+    const before = countOf(iso, ex);
+    const wasAll = allDone(iso);
+    const v = Math.max(0, Math.min(9999, Math.round(value)));
+    strength.days[iso] = { ...dayCounts(iso), [ex]: v };
+    if (!Object.values(strength.days[iso]).some((x) => x > 0)) delete strength.days[iso];
+    saveStrength();
+    renderStrength(ex);
+    const target = strength.targets[ex];
+    if (!celebrateDone) return;
+    if (!wasAll && allDone(iso)) {
+      celebrate('Alles geschafft!', `${EXERCISES.map((e) => strength.targets[e.id]).join(' · ')}`, ' – Liegestütze, Klimmzüge und Dips für heute erledigt! 💪');
+    } else if (before < target && v >= target) {
+      const e = EXERCISES.find((x) => x.id === ex);
+      confetti(36);
+      toast(`${e.name} geschafft – ${v} Stück! ${e.emo}`);
+    }
+  }
+
+  const exEls = {};
+  function buildStrength() {
+    const grid = $('#strengthGrid');
+    for (const e of EXERCISES) {
+      const strong = h('strong', { text: '0' });
+      const of = h('span', { class: 'ex-of' });
+      const left = h('div', { class: 'ex-left' });
+      const fill = h('span');
+      const week = h('div', { class: 'ex-week', role: 'img' });
+      const btn = (d, label, cls = '') => h('button', { class: `ex-btn ${cls}`, type: 'button', 'aria-label': `${e.name} ${d > 0 ? 'plus' : 'minus'} ${Math.abs(d)}`, text: label, onclick: (ev) => {
+        setCount(e.id, countOf(todayISO(), e.id) + d);
+        if (d > 0) floatPlus(ev.currentTarget, `+${d}`);
+        if (navigator.vibrate) navigator.vibrate(8);
+      } });
+      const card = h('div', { class: 'ex', 'data-ex': e.id },
+        h('div', { class: 'ex-head' }, h('span', { class: 'ex-ico emo', 'aria-hidden': 'true', text: e.emo }), h('span', { class: 'ex-name', text: e.name }), h('span', { class: 'ex-check', 'aria-hidden': 'true', text: '✓' })),
+        h('button', { class: 'ex-count', type: 'button', title: 'Antippen, um die Zahl direkt einzugeben', onclick: () => editCount(e) }, strong, of),
+        h('div', { class: 'ex-bar', role: 'progressbar', 'aria-label': e.name, 'aria-valuemin': 0, 'aria-valuemax': 100 }, fill),
+        left,
+        h('div', { class: 'ex-btns' }, btn(-1, '−1', 'minus'), btn(1, '+1'), btn(5, '+5'), btn(10, '+10', 'big')),
+        week);
+      exEls[e.id] = { card, strong, of, left, fill, week };
+      grid.append(card);
+    }
+  }
+
+  function floatPlus(anchor, text) {
+    if (reducedMotion()) return;
+    const r = anchor.getBoundingClientRect();
+    const el = h('span', { class: 'float-plus', text, 'aria-hidden': 'true' });
+    el.style.left = r.left + r.width / 2 + 'px';
+    el.style.top = r.top + 'px';
+    document.body.append(el);
+    setTimeout(() => el.remove(), 800);
+  }
+
+  function renderStrength(changed) {
+    if (!exEls.pushups) buildStrength();
+    const iso = todayISO();
+    const days = [];
+    for (let i = 6; i >= 0; i--) { const d = new Date(); d.setDate(d.getDate() - i); days.push(d); }
+    for (const e of EXERCISES) {
+      const el = exEls[e.id];
+      const v = countOf(iso, e.id), target = strength.targets[e.id];
+      const done = v >= target;
+      el.strong.textContent = v;
+      el.of.textContent = `/ ${target}`;
+      el.left.textContent = done ? (v > target ? `Ziel geschafft – ${v - target} extra! 🎉` : 'Ziel geschafft! 🎉') : `noch ${target - v}`;
+      el.fill.style.width = Math.min(100, (v / target) * 100) + '%';
+      el.fill.parentNode.setAttribute('aria-valuenow', Math.round(Math.min(100, (v / target) * 100)));
+      el.card.classList.toggle('is-done', done);
+      if (changed === e.id) { el.strong.classList.remove('bump'); void el.strong.offsetWidth; el.strong.classList.add('bump'); }
+      // last 7 days: bar height = share of the daily target
+      const cells = days.map((d) => {
+        const di = P.iso(d), n = countOf(di, e.id), share = Math.min(1, n / target);
+        const lbl = `${d.toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'numeric' })}: ${n} von ${target}`;
+        return h('span', { class: `wk${n >= target ? ' full' : ''}${di === iso ? ' today' : ''}`, title: lbl },
+          h('i', { style: `height:${n ? Math.max(4, Math.round(share * 30)) : 0}px` }),
+          h('b', { text: d.toLocaleDateString('de-DE', { weekday: 'narrow' }) }));
+      });
+      el.week.replaceChildren(...cells);
+      el.week.setAttribute('aria-label', `${e.name}, letzte 7 Tage: ` + days.map((d) => countOf(P.iso(d), e.id)).join(', '));
+    }
+    const streak = strengthStreak();
+    const monday = mondayOf(new Date());
+    const weekSum = (ex) => Object.entries(strength.days).filter(([d]) => d >= P.iso(monday)).reduce((a, [, c]) => a + (+c[ex] || 0), 0);
+    const doneToday = EXERCISES.filter((e) => countOf(iso, e.id) >= strength.targets[e.id]).length;
+    $('#strengthFoot').replaceChildren(
+      ...(streak >= 1 ? [h('span', { class: 'pill good', text: `🔥 ${streak} ${streak === 1 ? 'Tag' : 'Tage'} in Folge alles geschafft` })] : []),
+      h('span', { class: 'pill', text: `Heute ${doneToday}/3 erledigt` }),
+      h('span', { class: 'pill', text: `Diese Woche: ${EXERCISES.map((e) => `${weekSum(e.id)} ${e.short}`).join(' · ')}` }));
+  }
+
+  function editCount(e) {
+    $('#editTitle').textContent = `${e.name} heute`;
+    const input = h('input', { type: 'number', min: 0, max: 9999, step: 1, value: countOf(todayISO(), e.id), inputmode: 'numeric' });
+    const form = h('form', { class: 'run-form' },
+      h('label', { class: 'field' }, h('span', { class: 'field-label', text: 'Wie viele hast du heute geschafft?' }), input),
+      h('div', { class: 'form-actions' },
+        h('button', { class: 'btn btn-primary', type: 'submit', text: 'Übernehmen' }),
+        h('button', { class: 'btn', type: 'button', text: 'Abbrechen', onclick: () => dlg.close() })));
+    form.addEventListener('submit', (ev) => {
+      ev.preventDefault();
+      const v = parseInt(input.value, 10);
+      if (v >= 0) setCount(e.id, v);
+      dlg.close();
+    });
+    $('#editBody').replaceChildren(form);
+    dlg.showModal();
+    input.select();
+  }
+
+  $('#strengthSettings').addEventListener('click', () => {
+    $('#editTitle').textContent = 'Tagesziele Kraft';
+    const inputs = {};
+    const form = h('form', { class: 'run-form' },
+      h('div', { class: 'fields' }, ...EXERCISES.map((e) => {
+        inputs[e.id] = h('input', { type: 'number', min: 1, max: 2000, step: 1, value: strength.targets[e.id], inputmode: 'numeric' });
+        return h('label', { class: 'field' }, h('span', { class: 'field-label', text: `${e.emo} ${e.name} pro Tag` }), inputs[e.id]);
+      })),
+      h('div', { class: 'form-actions' },
+        h('button', { class: 'btn btn-primary', type: 'submit', text: 'Speichern' }),
+        h('button', { class: 'btn', type: 'button', text: 'Abbrechen', onclick: () => dlg.close() })));
+    form.addEventListener('submit', (ev) => {
+      ev.preventDefault();
+      for (const e of EXERCISES) { const v = parseInt(inputs[e.id].value, 10); if (v >= 1 && v <= 2000) strength.targets[e.id] = v; }
+      saveStrength();
+      renderStrength();
+      dlg.close();
+      toast('Tagesziele gespeichert 💪');
+    });
+    $('#editBody').replaceChildren(form);
+    dlg.showModal();
+  });
+
+  // New day while the app stays open → fresh counters
+  let strengthDay = null;
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && strengthDay !== todayISO()) { strengthDay = todayISO(); renderStrength(); renderOverview(); } });
+
+  // ============================================================
   //  Persistence actions
   // ============================================================
   /** Saves a run; returns the goals this run has just completed. */
@@ -1599,7 +1773,7 @@
     download(`laufbuch-${todayISO()}.csv`, '﻿' + rows.map((r) => r.map(esc).join(';')).join('\r\n'), 'text/csv;charset=utf-8');
   });
   $('#exportJsonBtn').addEventListener('click', () => {
-    download(`laufbuch-backup-${todayISO()}.json`, JSON.stringify({ app: 'laufbuch', version: 2, exportedAt: new Date().toISOString(), runs, goals }, null, 1), 'application/json');
+    download(`laufbuch-backup-${todayISO()}.json`, JSON.stringify({ app: 'laufbuch', version: 3, exportedAt: new Date().toISOString(), runs, goals, strength }, null, 1), 'application/json');
   });
   $('#importInput').addEventListener('change', async (e) => {
     const file = e.target.files[0];
@@ -1642,9 +1816,20 @@
         }
         saveGoals();
       }
+      let nd = 0;
+      if (data.strength && typeof data.strength === 'object') {
+        for (const e of EXERCISES) { const t = +((data.strength.targets || {})[e.id]); if (t >= 1 && t <= 2000) strength.targets[e.id] = t; }
+        for (const [d, c] of Object.entries(data.strength.days || {})) {
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || !c || typeof c !== 'object') continue;
+          const clean = {};
+          for (const e of EXERCISES) { const v = +c[e.id]; if (Number.isFinite(v) && v >= 0 && v <= 9999) clean[e.id] = Math.max(countOf(d, e.id), Math.round(v)); }
+          if (Object.keys(clean).length) { strength.days[d] = { ...dayCounts(d), ...clean }; nd++; }
+        }
+        saveStrength();
+      }
       runs = await DB.all();
       renderAll();
-      toast(`${n} ${n === 1 ? 'Einheit' : 'Einheiten'}${ng ? ` und ${ng} ${ng === 1 ? 'Ziel' : 'Ziele'}` : ''} importiert`);
+      toast(`${n} ${n === 1 ? 'Einheit' : 'Einheiten'}${ng ? `, ${ng} ${ng === 1 ? 'Ziel' : 'Ziele'}` : ''}${nd ? ` und ${nd} Kraft-${nd === 1 ? 'Tag' : 'Tage'}` : ''} importiert`);
     } catch {
       toast('Die Datei konnte nicht gelesen werden');
     }
@@ -1721,6 +1906,8 @@
   // ---------- Boot ----------
   async function init() {
     loadPrefs();
+    loadStrength();
+    strengthDay = todayISO();
     applyTheme();
     $$('[data-mascot]').forEach((el) => setMascot(el, el.dataset.mascot));
     runs = await DB.all();
@@ -1734,5 +1921,5 @@
   init();
 
   // Exposed for debugging / tests
-  window.Laufbuch = { get runs() { return runs; }, get goals() { return goals; }, saveRun, deleteRun };
+  window.Laufbuch = { get runs() { return runs; }, get goals() { return goals; }, get strength() { return strength; }, saveRun, deleteRun };
 })();

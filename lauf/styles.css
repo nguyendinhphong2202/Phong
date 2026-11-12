@@ -272,6 +272,68 @@ h1, h2, h3 { font-family: var(--font-num); font-weight: 600; letter-spacing: .00
 .steps small { display: block; color: var(--text-soft); font-weight: 600; font-size: 13px; }
 .install-note { color: var(--text-soft); font-size: 13.5px; font-weight: 600; margin: 14px 0 0; }
 
+/* ---------- Kraft-Challenge ---------- */
+.strength-card { margin-bottom: 16px; }
+.strength-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.ex {
+  display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 14px 16px 12px; border-radius: 22px;
+  background: var(--p-lilac); transition: background .35s, transform .35s var(--bounce);
+}
+.ex[data-ex="pullups"] { background: var(--p-sky); }
+.ex[data-ex="dips"] { background: var(--p-butter); }
+.ex.is-done { background: var(--good-soft); }
+.ex-head { display: flex; align-items: center; gap: 8px; }
+.ex-ico { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: var(--surface); font-size: 17px; }
+.ex-name { font-weight: 800; flex: 1; }
+.ex-check {
+  display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--good); color: var(--surface);
+  font-weight: 800; font-size: 14px; transform: scale(0); transition: transform .45s var(--bounce);
+}
+.ex.is-done .ex-check { transform: scale(1); }
+.ex-count {
+  display: flex; align-items: baseline; gap: 6px; border: 0; background: none; padding: 0; text-align: left; width: fit-content;
+  border-radius: 10px; font-variant-numeric: tabular-nums;
+}
+.ex-count strong { font-family: var(--font-num); font-weight: 600; font-size: 46px; line-height: 1; display: inline-block; }
+.ex-count strong.bump { animation: pop .4s var(--bounce); }
+.ex-of { color: var(--text-soft); font-weight: 800; font-size: 16px; }
+.ex-count:hover .ex-of { text-decoration: underline dotted; }
+.ex-bar { height: 12px; border-radius: 999px; background: var(--surface); overflow: hidden; }
+.ex-bar span {
+  display: block; height: 100%; width: 0; border-radius: 999px; transition: width .5s var(--bounce);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 70%, #ffb199), var(--accent));
+}
+.ex.is-done .ex-bar span { background: linear-gradient(90deg, #8be0bd, #3fb98a); }
+.ex-left { color: var(--text-soft); font-size: 13.5px; font-weight: 700; min-height: 20px; }
+.ex.is-done .ex-left { color: var(--good); }
+.ex-btns { display: grid; grid-template-columns: .8fr 1fr 1fr 1.2fr; gap: 6px; }
+.ex-btn {
+  min-height: 44px; border-radius: 14px; border: 2px solid var(--border-strong); background: var(--surface); color: var(--text);
+  font-family: var(--font-num); font-weight: 600; font-size: 17px; box-shadow: 0 3px 0 var(--border-strong);
+  transition: transform .15s var(--bounce), box-shadow .15s; touch-action: manipulation;
+}
+.ex-btn:hover { transform: translateY(-1px); }
+.ex-btn:active { transform: translateY(3px); box-shadow: 0 0 0 var(--border-strong); }
+.ex-btn.big { background: var(--accent); border-color: var(--accent); color: var(--on-accent); box-shadow: 0 3px 0 var(--accent-deep); }
+.ex-btn.big:active { box-shadow: 0 0 0 var(--accent-deep); }
+.ex-btn.minus { color: var(--text-soft); }
+.ex-week { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-top: 2px; }
+.wk { position: relative; height: 46px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 3px; }
+.wk i { display: block; width: 72%; max-width: 22px; border-radius: 6px 6px 3px 3px; background: var(--bar-muted); }
+.wk.full i { background: var(--accent); }
+.ex.is-done .wk.today i, .wk.full.today i { background: var(--good); }
+.wk b { font-size: 10.5px; font-weight: 800; color: var(--text-mute); line-height: 1; }
+.wk.today b { color: var(--text); }
+/* dotted line = daily target */
+.wk::after { content: ""; position: absolute; left: 50%; bottom: 14px; width: 72%; max-width: 22px; height: 30px; transform: translateX(-50%); border-top: 2px dotted color-mix(in srgb, var(--text-mute) 45%, transparent); pointer-events: none; box-sizing: border-box; }
+.strength-foot { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.float-plus {
+  position: fixed; z-index: 70; pointer-events: none; transform: translate(-50%, -100%);
+  font-family: var(--font-num); font-weight: 700; font-size: 20px; color: var(--accent-text);
+  animation: float-up .8s var(--soft) forwards;
+}
+@keyframes float-up { from { opacity: 1; transform: translate(-50%, -60%) scale(.8); } to { opacity: 0; transform: translate(-50%, -260%) scale(1.15); } }
+
 /* ---------- Goals ---------- */
 .goals-card { margin-bottom: 16px; }
 .goal-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
@@ -493,7 +555,7 @@ h1, h2, h3 { font-family: var(--font-num); font-weight: 600; letter-spacing: .00
 .btn-danger { color: var(--danger); }
 .btn-sm { padding: 7px 14px; font-size: 13.5px; }
 .btn[disabled] { opacity: .5; pointer-events: none; }
-.link-btn { border: 0; background: none; color: var(--accent-text); font-weight: 800; font-size: 14px; padding: 4px 8px; border-radius: 999px; transition: background .2s; }
+.link-btn { white-space: nowrap; border: 0; background: none; color: var(--accent-text); font-weight: 800; font-size: 14px; padding: 4px 8px; border-radius: 999px; transition: background .2s; }
 .link-btn:hover { background: var(--accent-soft); }
 
 /* ---------- Add view ---------- */
@@ -704,6 +766,7 @@ kbd { font: 800 12px var(--font); padding: 1px 7px; border: 2px solid var(--bord
 
 /* ---------- Responsive ---------- */
 @media (max-width: 860px) {
+  .strength-grid { gap: 10px; }
   .kpis { grid-template-columns: repeat(2, 1fr); gap: 12px; }
   .grid-2 { grid-template-columns: 1fr; gap: 12px; margin-top: 12px; }
 }
@@ -738,6 +801,15 @@ kbd { font: 800 12px var(--font); padding: 1px 7px; border: 2px solid var(--bord
   .card { padding: 14px; }
   .chart { height: 190px; }
   .ph { width: 80px; height: 116px; }
+  .strength-grid { grid-template-columns: 1fr; gap: 10px; }
+  .ex { display: grid; grid-template-columns: 1fr auto; grid-template-areas: "head count" "bar bar" "left left" "btns btns" "week week"; column-gap: 10px; }
+  .ex-head { grid-area: head; }
+  .ex-count { grid-area: count; justify-self: end; }
+  .ex-count strong { font-size: 38px; }
+  .ex-bar { grid-area: bar; }
+  .ex-left { grid-area: left; }
+  .ex-btns { grid-area: btns; }
+  .ex-week { grid-area: week; }
   .run-list.compact .run-meta span:nth-child(n+4) { display: none; }
   .dialog { max-height: calc(100vh - 16px); }
   .view-title { font-size: 26px; }
